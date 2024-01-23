@@ -32,7 +32,7 @@ requestOptions = {
   "receiver": "0x3440326f551B8A7ee198cEE35cb5D517f2d296a2",
   "disableEstimate": "true"
 , "compatibility": "true"
-# ,  "protocols": "ARBITRUM_UNISWAP_V3"
+, "protocols": "ARBITRUM_UNISWAP_V3"
 }
 }
 

@@ -339,13 +339,18 @@ contract Adapter is ReentrancyGuard {
         _HLP_PORTAL.buyPortalEnergy(_amount, _minReceived, _deadline);
     }
 
-    function swapOneInch(bytes calldata _actionData) internal returns(uint256) {
+    function swapOneInch(uint256 amountReceived, bytes calldata _actionData) internal returns(uint256) {
         /// @dev decode the data.
         (address _executor, SwapDescription memory _description, bytes memory _data) = abi.decode(_actionData, (address, SwapDescription, bytes));
 
         /// @dev do the swap.
-        IERC20(_description.srcToken).approve(ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT_ADDRESS, _description.amount);
-        (uint256 returnAmount_,) = _ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT.swap(_executor, _description, "", _data);
+        _PSM_TOKEN.approve(ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT_ADDRESS, amountReceived);
+        (uint256 returnAmount_, uint256 spentAmount_) = _ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT.swap(_executor, _description, "", _data);
+        _PSM_TOKEN.approve(ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT_ADDRESS, 0);
+
+        uint256 remainAmount = amountReceived - spentAmount_ ;
+        if(remainAmount > 0) _PSM_TOKEN.safeTransfer(msg.sender, remainAmount);
+        
         return returnAmount_;
     }
     /// @notice Sell portalEnergy into contract to receive PSM
@@ -395,7 +400,7 @@ contract Adapter is ReentrancyGuard {
             return amountReceived;
         }
         /// @dev If wanted token is Other than PSM.
-        return swapOneInch(_actionData);
+        return swapOneInch(amountReceived, _actionData);
     }
 
     // ============================================
