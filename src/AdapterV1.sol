@@ -17,7 +17,7 @@ contract Adapter is ReentrancyGuard {
     IERC20 constant _ENERGY_TOKEN = IERC20(ENERGY_TOKEN_ADDRESS); // the ERC20 representation of portalEnergy
     IERC20 constant _HLP_TOKEN = IERC20(HLP_TOKEN_ADDRESS); // the ERC20 representation of principal token
     IOneInchV5AggregationRouter constant _ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT =
-        IOneInchV5AggregationRouter(ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT_ADDRESS); // Interface of 1inch
+    IOneInchV5AggregationRouter(ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT_ADDRESS); // Interface of 1inch
 
     uint256 public totalPrincipalStaked; // shows how much principal is staked by all users combined
 
@@ -26,7 +26,7 @@ contract Adapter is ReentrancyGuard {
     constructor() {}
 
     modifier existingAccount(address _user) {
-        require(accounts[_user].isExist, ErrorsLib.AccountDoesNotExist);
+        if(!accounts[_user].isExist) revert ErrorsLib.AccountDoesNotExist();
         _;
     }
 
@@ -104,8 +104,8 @@ contract Adapter is ReentrancyGuard {
     /// @param _amount The amount of tokens to stake
     /// @param _user The user whom staked for
     function stake(address _user, uint256 _amount) external nonReentrant {
-        require(_user != address(0), ErrorsLib.ZeroAddress);
-        require(_amount != 0, ErrorsLib.ZeroAmount);
+        if(_user == address(0)) revert ErrorsLib.InvalidInput();
+        if(_amount == 0) revert ErrorsLib.InvalidInput();
 
         Account memory account = accounts[_user].isExist ? _updateAccount(_user, _amount) : _createAccount(_amount);
         accounts[_user] = account;
@@ -125,7 +125,7 @@ contract Adapter is ReentrancyGuard {
         );
 
         _HLP_TOKEN.safeTransferFrom(msg.sender, address(this), _amount);
-        _HLP_TOKEN.safeApprove(HLP_PORTAL_ADDRESS, _amount);
+        _HLP_TOKEN.approve(HLP_PORTAL_ADDRESS, _amount);
         _HLP_PORTAL.stake(_amount);
     }
 
@@ -141,15 +141,11 @@ contract Adapter is ReentrancyGuard {
     /// @dev It sends the principal tokens to the user
     /// @dev It emits an event with the updated stake information
     /// @param _amount The amount of tokens to unstake
-    /// @param _receiver The address who will receive principal tokens of tokens to unstake
-    function unstake(address _receiver, uint256 _amount) external nonReentrant existingAccount(msg.sender) {
-        require(_amount != 0, ErrorsLib.ZeroAmount);
-        require(_receiver != address(0), ErrorsLib.ZeroAddress);
+    function unstake(uint256 _amount) external nonReentrant existingAccount(msg.sender) {
+        if(_amount == 0) revert ErrorsLib.InvalidInput();
 
-        address msgSender = msg.sender;
-
-        Account memory account = _updateAccount(msgSender, 0);
-        require(_amount <= account.availableToWithdraw, ErrorsLib.InsufficientToWithdraw);
+        Account memory account = _updateAccount(msg.sender, 0);
+        if(_amount > account.availableToWithdraw) revert ErrorsLib.InsufficientToWithdraw();
 
         /// @dev Update the user's stake info & cache to memory
         uint256 maxLockDuration = _HLP_PORTAL.maxLockDuration();
@@ -164,15 +160,15 @@ contract Adapter is ReentrancyGuard {
         Account memory user = Account(
             true, block.timestamp, maxLockDuration, stakedBalance, maxStakeDebt, portalEnergy, availableToWithdraw
         );
-        accounts[msgSender] = user;
+        accounts[msg.sender] = user;
 
         /// @dev Update the global tracker of staked principal
         totalPrincipalStaked -= _amount;
 
         /// @dev Emit an event with the updated stake information
         emit EventsLib.StakePositionUpdated(
-            msgSender,
-            msgSender,
+            msg.sender,
+            msg.sender,
             block.timestamp,
             maxLockDuration,
             stakedBalance,
@@ -187,7 +183,7 @@ contract Adapter is ReentrancyGuard {
         uint256 availableAmount = balanceAfter - balanceBefore;
 
         /// @dev Send the principal tokens to the user
-        _HLP_TOKEN.safeTransfer(_receiver, availableAmount);
+        _HLP_TOKEN.safeTransfer(msg.sender, availableAmount);
     }
 
     /// @dev As HLP Portal has trade time lock, check it here.
@@ -202,13 +198,11 @@ contract Adapter is ReentrancyGuard {
     /// @dev It burns the appropriate portalEnergyToken from the user's wallet to increase portalEnergy sufficiently
     /// @dev It withdraws the principal from the Portal to pay the user
     /// @dev It updates the user's information
-    /// @dev It sends the full stake balance to the _receiver
+    /// @dev It sends the full stake balance to the msg.sender
     /// @dev It emits an event with the updated stake information
-    function forceUnstakeAll(address _receiver) external nonReentrant existingAccount(msg.sender) {
-        require(_receiver != address(0), ErrorsLib.ZeroAddress);
-        address msgSender = msg.sender;
+    function forceUnstakeAll() external nonReentrant existingAccount(msg.sender) {
         /// @dev Update the user's stake data
-        Account memory account = _updateAccount(msgSender, 0);
+        Account memory account = _updateAccount(msg.sender, 0);
         /// @dev Initialize cached variable
         uint256 portalEnergy = account.portalEnergy;
         uint256 maxStakeDebt = account.maxStakeDebt;
@@ -217,11 +211,11 @@ contract Adapter is ReentrancyGuard {
         if (portalEnergy < maxStakeDebt) {
             uint256 remainingDebt = maxStakeDebt - portalEnergy;
             /// @dev Require that the user has enough Portal Energy Tokens
-            require(_ENERGY_TOKEN.balanceOf(address(msgSender)) >= remainingDebt, ErrorsLib.InsufficientPEtokens);
-            require(_checkLastTrade(), ErrorsLib.TradeTimelockActive);
+            if(_ENERGY_TOKEN.balanceOf(address(msg.sender)) < remainingDebt) revert ErrorsLib.InsufficientPEtokens();
+            if(!_checkLastTrade()) revert ErrorsLib.TradeTimelockActive();
             /// @dev Burn the appropriate portalEnergyToken from the user's wallet to increase portalEnergy sufficiently
-            require(_ENERGY_TOKEN.transferFrom(msgSender, address(this), remainingDebt));
-            require(_ENERGY_TOKEN.approve(HLP_PORTAL_ADDRESS, remainingDebt));
+            _ENERGY_TOKEN.safeTransferFrom(msg.sender, address(this), remainingDebt);
+            _ENERGY_TOKEN.approve(HLP_PORTAL_ADDRESS, remainingDebt);
             _HLP_PORTAL.burnPortalEnergyToken(address(this), remainingDebt);
             portalEnergy += remainingDebt;
         }
@@ -232,13 +226,13 @@ contract Adapter is ReentrancyGuard {
         portalEnergy -= (balance * maxLockDuration * WAD) / (SECONDS_PER_YEAR * DECIMALS_ADJUSTMENT);
 
         Account memory user = Account(true, block.timestamp, maxLockDuration, 0, 0, portalEnergy, 0);
-        accounts[msgSender] = user;
+        accounts[msg.sender] = user;
 
         /// @dev Update the global tracker of staked principal
         totalPrincipalStaked -= balance;
         /// @dev Emit an event with the updated stake information
         emit EventsLib.StakePositionUpdated(
-            msgSender, msgSender, block.timestamp, maxLockDuration, 0, 0, portalEnergy, 0
+            msg.sender, msg.sender, block.timestamp, maxLockDuration, 0, 0, portalEnergy, 0
         );
 
         /// @dev Send the user´s staked balance to the user
@@ -246,7 +240,7 @@ contract Adapter is ReentrancyGuard {
         _HLP_PORTAL.unstake(balance);
         uint256 balanceAfter = _HLP_TOKEN.balanceOf(address(this));
         uint256 availableAmount = balanceAfter - balanceBefore;
-        _HLP_TOKEN.safeTransfer(_receiver, availableAmount);
+        _HLP_TOKEN.safeTransfer(msg.sender, availableAmount);
     }
 
     // ============================================
@@ -258,25 +252,24 @@ contract Adapter is ReentrancyGuard {
     /// @param _amount The amount of portalEnergyToken to mint
     function mintPortalEnergyToken(address _recipient, uint256 _amount)
         external
-        existingAccount(msg.sender)
         nonReentrant
+        existingAccount(msg.sender)
     {
-        address msgSender = msg.sender;
-        require(_amount != 0, ErrorsLib.ZeroAmount);
-        require(_recipient != address(0), ErrorsLib.ZeroAddress);
-        require(_checkLastTrade(), ErrorsLib.TradeTimelockActive);
-        Account memory account = _updateAccount(msgSender, 0);
-        require(account.portalEnergy >= _amount, ErrorsLib.InsufficientBalance);
+        if(_amount == 0) revert ErrorsLib.InvalidInput();
+        if(_recipient == address(0)) revert ErrorsLib.InvalidInput();
+        if(!_checkLastTrade()) revert ErrorsLib.TradeTimelockActive();
+        Account memory account = _updateAccount(msg.sender, 0);
+        if(account.portalEnergy < _amount) revert ErrorsLib.InsufficientBalance();
 
         /// @dev Reduce the portalEnergy of the caller by the amount of portal energy tokens to be minted
         account.portalEnergy = account.portalEnergy - _amount;
-        accounts[msgSender] = account;
+        accounts[msg.sender] = account;
 
         /// @dev Mint portal energy tokens to the recipient's wallet
         _HLP_PORTAL.mintPortalEnergyToken(_recipient, _amount);
 
         /// @dev Emit the event that the ERC20 representation has been minted to recipient
-        emit EventsLib.PortalEnergyMinted(msgSender, _recipient, _amount);
+        emit EventsLib.PortalEnergyMinted(msg.sender, _recipient, _amount);
     }
 
     /// @notice Burn portalEnergyToken from user wallet and increase portalEnergy of recipient equally
@@ -284,25 +277,25 @@ contract Adapter is ReentrancyGuard {
     /// @param _amount The amount of portalEnergyToken to burn
     function burnPortalEnergyToken(address _recipient, uint256 _amount)
         external
-        existingAccount(_recipient)
         nonReentrant
+        existingAccount(_recipient)
     {
-        address msgSender = msg.sender;
-        require(_amount != 0, ErrorsLib.ZeroAmount);
-        require(_checkLastTrade(), ErrorsLib.TradeTimelockActive);
+        if(_recipient == address(0)) revert ErrorsLib.InvalidInput();
+        if(_amount == 0) revert ErrorsLib.InvalidInput();
+        if(!_checkLastTrade()) revert ErrorsLib.TradeTimelockActive();
 
         /// @dev Require that the caller has sufficient tokens to burn
-        require(_ENERGY_TOKEN.balanceOf(msgSender) >= _amount, ErrorsLib.InsufficientBalance);
+        if(_ENERGY_TOKEN.balanceOf(msg.sender) < _amount) revert ErrorsLib.InsufficientBalance();
 
-        require(_ENERGY_TOKEN.transferFrom(msgSender, address(this), _amount));
-        require(_ENERGY_TOKEN.approve(HLP_PORTAL_ADDRESS, _amount));
+        _ENERGY_TOKEN.safeTransferFrom(msg.sender, address(this), _amount);
+        _ENERGY_TOKEN.approve(HLP_PORTAL_ADDRESS, _amount);
         _HLP_PORTAL.burnPortalEnergyToken(address(this), _amount);
 
         /// @dev Increase the portalEnergy of the recipient by the amount of portalEnergyToken burned
         accounts[_recipient].portalEnergy += _amount;
 
         /// @dev Emit the event that the ERC20 representation has been burned and value accrued to recipient
-        emit EventsLib.PortalEnergyBurned(msgSender, _recipient, _amount);
+        emit EventsLib.PortalEnergyBurned(msg.sender, _recipient, _amount);
     }
 
     // ============================================
@@ -326,14 +319,13 @@ contract Adapter is ReentrancyGuard {
         nonReentrant
         existingAccount(_user)
     {
-        address msgSender = msg.sender;
-        require(_amount != 0, ErrorsLib.ZeroAmount);
-        require(_minReceived != 0, ErrorsLib.ZeroAmount);
-        require(_deadline >= block.timestamp, ErrorsLib.DeadlineExpired);
-        require(_checkLastTrade(), ErrorsLib.TradeTimelockActive);
-        require(_PSM_TOKEN.balanceOf(msgSender) >= _amount, ErrorsLib.InsufficientBalance);
+        if(_amount == 0) revert ErrorsLib.InvalidInput();
+        if(_minReceived == 0) revert ErrorsLib.InvalidInput();
+        if(_deadline < block.timestamp) revert ErrorsLib.DeadlineExpired();
+        if(!_checkLastTrade()) revert ErrorsLib.TradeTimelockActive();
+        if(_PSM_TOKEN.balanceOf(msg.sender) < _amount) revert ErrorsLib.InsufficientBalance();
         uint256 amountReceived = _HLP_PORTAL.quoteBuyPortalEnergy(_amount);
-        require(amountReceived >= _minReceived, ErrorsLib.InvalidOutput);
+        if(amountReceived < _minReceived) revert ErrorsLib.InvalidOutput();
         /// @dev Update the stake data of the user
         Account memory account = _updateAccount(_user, 0);
 
@@ -342,106 +334,75 @@ contract Adapter is ReentrancyGuard {
 
         emit EventsLib.PortalEnergyBuyExecuted(msg.sender, _user, amountReceived);
 
-        require(_PSM_TOKEN.transferFrom(msgSender, address(this), _amount));
-        require(_PSM_TOKEN.approve(HLP_PORTAL_ADDRESS, _amount));
+        _PSM_TOKEN.safeTransferFrom(msg.sender, address(this), _amount);
+        _PSM_TOKEN.approve(HLP_PORTAL_ADDRESS, _amount);
         _HLP_PORTAL.buyPortalEnergy(_amount, _minReceived, _deadline);
     }
 
-    /// @dev Helper to decode the encoded callOnIntegration call arguments for takeOrder()
-    function __decodeTakeOrderCallArgs(bytes memory _actionData)
-        private
-        pure
-        returns (address executor_, SwapDescription memory swapDescription_, bytes memory data_)
-    {
-        return abi.decode(_actionData, (address, SwapDescription, bytes));
-    }
+    function swapOneInch(bytes calldata _actionData) public returns(uint256) {
+        /// @dev decode the data.
+        (address _executor, SwapDescription memory _description, bytes memory _data) = abi.decode(_actionData, (address, SwapDescription, bytes));
 
-    function swap1inch(uint256 amountReceived, address _receiver, bytes calldata _actionData)
-        internal
-        returns (uint256)
-    {
-        // uint256 _minReceivedToken,
-        // address _executor,
-        // address payable _srcReceiver,
-        // uint256 _flags,
-        // bytes calldata _permit,
-        // bytes calldata _data
-
-        // first way
-        // require(_minReceivedToken != 0, ErrorsLib.ZeroAmount);
-        // require(_PSM_TOKEN.approve(ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT_ADDRESS, amountReceived));
-        // SwapDescription memory _desc = SwapDescription(
-        //     PSM_TOKEN_ADDRESS, _token, _srcReceiver, _receiver, amountReceived, _minReceivedToken, _flags
-        // );
-
-        // second way: decode a calldata
-        (address _executor, SwapDescription memory _desc, bytes memory _data) =
-            abi.decode(_actionData, (address, SwapDescription, bytes));
-
-        // @dev do the swap.
-        (uint256 returnAmount_, uint256 spentAmount_) =
-            _ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT.swap(_executor, _desc, "", _data);
-
-        /// @dev Transfer not used PSM.
-        if (spentAmount_ < amountReceived) require(_PSM_TOKEN.transfer(_receiver, amountReceived - spentAmount_));
-
+        /// @dev do the swap.
+        IERC20(_description.srcToken).approve(ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT_ADDRESS, _description.amount);
+        (uint256 returnAmount_,) = _ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT.swap(_executor, _description, "", _data);
         return returnAmount_;
     }
-
+    /// @notice Sell portalEnergy into contract to receive PSM
+    /// @dev This function allows users to sell their portalEnergy to the contract to receive PSM tokens
+    /// @dev It checks if the user has a stake and updates the stake data
+    /// @dev It checks if the user has enough portalEnergy to sell
+    /// @dev It updates the output token reserve and calculates the reserve of portalEnergy (Input)
+    /// @dev It calculates the amount of output token received based on the amount of portalEnergy sold
+    /// @dev It checks if the amount of output token received is greater than or equal to the minimum expected output
+    /// @dev It reduces the portalEnergy balance of the user by the amount of portalEnergy sold
+    /// @dev It sends the output token to the user
+    /// @dev It emits a portalEnergySellExecuted event
+    /// @param _receiver The address for sending tokens
+    /// @param _amount The amount of portalEnergy to sell
+    /// @param _minReceivedPSM The minimum amount of PSM tokens to receive
     function sellPortalEnergy(
         address payable _receiver,
         uint256 _amount,
         uint256 _minReceivedPSM,
         uint256 _deadline,
-        address _token,
+        bool _psm,
         bytes calldata _actionData
-    )
-        // uint256 _minReceivedToken,
-        // address _executor,
-        // address payable _srcReceiver,
-        // uint256 _flags,
-        // bytes calldata _permit,
-        // bytes calldata _data
-        external
-        payable
-        nonReentrant
-        existingAccount(msg.sender)
-        returns (uint256)
-    {
-        address msgSender = msg.sender;
-
+    ) external nonReentrant existingAccount(msg.sender) returns (uint256) {
         /// @dev validated input arguments
-        require(_receiver != address(0), ErrorsLib.ZeroAddress);
-        require(_amount != 0, ErrorsLib.ZeroAmount);
-        require(_minReceivedPSM != 0, ErrorsLib.ZeroAmount);
-        require(_deadline >= block.timestamp, ErrorsLib.DeadlineExpired);
-        require(_token != address(0), ErrorsLib.ZeroAddress);
-        require(_checkLastTrade(), ErrorsLib.TradeTimelockActive);
-        Account memory account = _updateAccount(msgSender, 0);
-        require(account.portalEnergy >= _amount, ErrorsLib.InsufficientBalance);
+        if (_receiver == address(0)) revert ErrorsLib.InvalidInput();
+        if (_amount == 0) revert ErrorsLib.InvalidInput();
+        if (_minReceivedPSM == 0) revert ErrorsLib.InvalidInput();
+        if(_deadline < block.timestamp) revert ErrorsLib.DeadlineExpired();
+        if(!_checkLastTrade()) revert ErrorsLib.TradeTimelockActive();
+        Account memory account = _updateAccount(msg.sender, 0);
+        if(account.portalEnergy < _amount) revert ErrorsLib.InsufficientBalance();
         uint256 amountReceived = _HLP_PORTAL.quoteSellPortalEnergy(_amount);
-        require(amountReceived >= _minReceivedPSM, ErrorsLib.InvalidOutput);
+        if(amountReceived < _minReceivedPSM) revert ErrorsLib.InvalidOutput();
 
         /// @dev Update the stake data of the user
         account.portalEnergy = account.portalEnergy - _amount;
-        accounts[msgSender] = account;
+        accounts[msg.sender] = account;
 
-        emit EventsLib.PortalEnergySellExecuted(msgSender, _receiver, amountReceived);
+        emit EventsLib.PortalEnergySellExecuted(msg.sender, _receiver, amountReceived);
 
         /// @dev Sell energy in Portal and get PSM
         _HLP_PORTAL.sellPortalEnergy(_amount, _minReceivedPSM, _deadline);
 
         /// @dev If wanted token is PSM, transfer it
-        if (_token == PSM_TOKEN_ADDRESS) {
-            require(_PSM_TOKEN.transfer(_receiver, amountReceived));
+        if (_psm) {
+            _PSM_TOKEN.safeTransfer(_receiver, amountReceived);
             return amountReceived;
         }
-
-        /// @dev If wanted token is Other than PSM, swap it.
-        return swap1inch(amountReceived, _receiver, _actionData);
+        /// @dev If wanted token is Other than PSM.
+        return swapOneInch(_actionData);
     }
 
-    function addLiquidity() external {}
+    // ============================================
+    // ==               LIQUIDITY                ==
+    // ============================================
+
+    // function addLiquidity() external {}
 
     // ============================================
     // ==              VIEW EXTERNAL             ==
