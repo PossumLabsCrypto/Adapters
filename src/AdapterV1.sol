@@ -339,7 +339,7 @@ contract Adapter is ReentrancyGuard {
         _HLP_PORTAL.buyPortalEnergy(_amount, _minReceived, _deadline);
     }
 
-    function swapOneInch(uint256 amountReceived, bytes calldata _actionData) internal returns(uint256) {
+    function swapOneInch(address _receiver, uint256 amountReceived, bytes calldata _actionData) internal returns(uint256) {
         /// @dev decode the data.
         (address _executor, SwapDescription memory _description, bytes memory _data) = abi.decode(_actionData, (address, SwapDescription, bytes));
 
@@ -349,7 +349,7 @@ contract Adapter is ReentrancyGuard {
         _PSM_TOKEN.approve(ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT_ADDRESS, 0);
 
         uint256 remainAmount = amountReceived - spentAmount_ ;
-        if(remainAmount > 0) _PSM_TOKEN.safeTransfer(msg.sender, remainAmount);
+        if(remainAmount > 0) _PSM_TOKEN.safeTransfer(_receiver, remainAmount);
         
         return returnAmount_;
     }
@@ -400,7 +400,7 @@ contract Adapter is ReentrancyGuard {
             return amountReceived;
         }
         /// @dev If wanted token is Other than PSM.
-        return swapOneInch(amountReceived, _actionData);
+        return swapOneInch(_receiver, amountReceived, _actionData);
     }
 
     // ============================================
