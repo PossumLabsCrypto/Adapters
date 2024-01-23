@@ -339,7 +339,7 @@ contract Adapter is ReentrancyGuard {
         _HLP_PORTAL.buyPortalEnergy(_amount, _minReceived, _deadline);
     }
 
-    function swapOneInch(bytes calldata _actionData) public returns(uint256) {
+    function swapOneInch(bytes calldata _actionData) internal returns(uint256) {
         /// @dev decode the data.
         (address _executor, SwapDescription memory _description, bytes memory _data) = abi.decode(_actionData, (address, SwapDescription, bytes));
 
