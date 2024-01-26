@@ -41,4 +41,9 @@ interface IHlpPortal {
     function lastTradeTime(
         address _address
     ) external view returns (uint256 lastTradeTime);
+
+    function getUpdateAccount(address _user, uint256 _amount)
+        external
+        view
+        returns (address, uint256, uint256, uint256, uint256, uint256, uint256);
 }

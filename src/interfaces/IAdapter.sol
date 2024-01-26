@@ -37,4 +37,5 @@ interface IAdapter {
     function quoteBuyPortalEnergy(uint256 _amountInput) external view returns (uint256);
 
     function quoteSellPortalEnergy(uint256 _amountInput) external view returns (uint256);
+
 }
