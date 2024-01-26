@@ -17,7 +17,7 @@ interface IAdapter {
 
     function unstake(uint256 _amount) external;
 
-    function forceUnstakeAll(address _receiver) external;
+    function forceUnstakeAll() external;
 
     function mintPortalEnergyToken(address _recipient, uint256 _amount) external;
 
@@ -25,7 +25,7 @@ interface IAdapter {
 
     function buyPortalEnergy(address _user, uint256 _amount, uint256 _minReceived, uint256 _deadline) external;
 
-    function sellPortalEnergy(address _receiver, uint256 _amount, uint256 _minReceived, uint256 _deadline) external;
+    function sellPortalEnergy(address _receiver, uint256 _amount, uint256 _minReceivedPSM, uint256 _deadline, bool _psm, bytes calldata _actionData) external;
 
     function getUpdateAccount(address _user, uint256 _amount)
         external
