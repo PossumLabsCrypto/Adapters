@@ -12,18 +12,23 @@ import {IOneInchV5AggregationRouter, SwapDescription} from "./interfaces/IOneInc
 import "./libraries/ConstantsLib.sol";
 
 contract Adapter is ReentrancyGuard {
-    IHlpPortal constant _HLP_PORTAL = IHlpPortal(HLP_PORTAL_ADDRESS); // Portal
+    IHlpPortal constant _HLP_PORTAL = IHlpPortal(HLP_PORTAL_ADDRESS); // HLP-Portal
     IERC20 constant _PSM_TOKEN = IERC20(PSM_TOKEN_ADDRESS); // the ERC20 representation of PSM token
     IERC20 constant _ENERGY_TOKEN = IERC20(ENERGY_TOKEN_ADDRESS); // the ERC20 representation of portalEnergy
     IERC20 constant _HLP_TOKEN = IERC20(HLP_TOKEN_ADDRESS); // the ERC20 representation of principal token
     IOneInchV5AggregationRouter constant _ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT =
-    IOneInchV5AggregationRouter(ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT_ADDRESS); // Interface of 1inch
+    IOneInchV5AggregationRouter(ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT_ADDRESS); // Interface of 1inchRouter
 
     uint256 public totalPrincipalStaked; // shows how much principal is staked by all users combined
 
     mapping(address => Account) public accounts; // Associate users with their stake position
 
     constructor() {}
+
+
+    // ============================================
+    // ==               MODIFIERS                ==
+    // ============================================
 
     modifier existingAccount(address _user) {
         if(!accounts[_user].isExist) revert ErrorsLib.AccountDoesNotExist();
@@ -314,6 +319,7 @@ contract Adapter is ReentrancyGuard {
     /// @param _user The user whom received energy
     /// @param _amount The amount of PSM tokens to sell
     /// @param _minReceived The minimum amount of portalEnergy to receive
+    /// @param _deadline The time that trx in valid
     function buyPortalEnergy(address _user, uint256 _amount, uint256 _minReceived, uint256 _deadline)
         external
         nonReentrant
@@ -366,6 +372,9 @@ contract Adapter is ReentrancyGuard {
     /// @param _receiver The address for sending tokens
     /// @param _amount The amount of portalEnergy to sell
     /// @param _minReceivedPSM The minimum amount of PSM tokens to receive
+    /// @param _deadline The time that trx in valid
+    /// @param _psm if uesr wants PSM token (true)
+    /// @param _actionData The data that calculate via oneInch API, offline
     function sellPortalEnergy(
         address payable _receiver,
         uint256 _amount,
