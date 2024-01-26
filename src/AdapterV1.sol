@@ -352,7 +352,6 @@ contract Adapter is ReentrancyGuard {
         /// @dev do the swap.
         _PSM_TOKEN.approve(ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT_ADDRESS, amountReceived);
         (uint256 returnAmount_, uint256 spentAmount_) = _ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT.swap(_executor, _description, "", _data);
-        _PSM_TOKEN.approve(ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT_ADDRESS, 0);
 
         uint256 remainAmount = amountReceived - spentAmount_ ;
         if(remainAmount > 0) _PSM_TOKEN.safeTransfer(_receiver, remainAmount);
