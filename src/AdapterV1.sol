@@ -355,26 +355,33 @@ contract Adapter is ReentrancyGuard {
         _HLP_PORTAL.buyPortalEnergy(_amount, _minReceived, _deadline);
     }
 
-    function swapOneInch(SwapData memory swap) internal {
+    function swapOneInch(SwapData memory _swap, bool _forLiquidity) internal {
         /// @dev decode the data.
         (address _executor, SwapDescription memory _description, bytes memory _data) =
-            abi.decode(swap.actionData, (address, SwapDescription, bytes));
+            abi.decode(_swap.actionData, (address, SwapDescription, bytes));
 
         /// @dev do the swap.
-        _PSM_TOKEN.approve(ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT_ADDRESS, swap.psmAmount);
-        (, uint256 spentAmount_) = _ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT.swap(_executor, _description, "", _data);
+        _PSM_TOKEN.approve(ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT_ADDRESS, _swap.psmAmount);
+        (, uint256 spentAmount_) = _ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT._swap(_executor, _description, "", _data);
 
-        uint256 remainAmount = swap.psmAmount - spentAmount_;
-        if (remainAmount > 0) _safeTransfer(PSM_TOKEN_ADDRESS, swap.recevier, remainAmount);
+        if (!_forLiquidity){
+            uint256 remainAmount = _swap.psmAmount - spentAmount_;
+            if (remainAmount > 0) _safeTransfer(PSM_TOKEN_ADDRESS, msg.sender, remainAmount);
+        }
     }
 
-    function addingLiquidity(SwapData memory swap) internal {
-        swapOneInch(swap);
+    function addingLiquidity(SwapData memory _swap) internal {
+        swapOneInch(_swap, true);
+
+        /// @dev this contract shouldn't hold any token, so we pass all tokens.
         uint256 psm_balance = _PSM_TOKEN.balanceOf(address(this));
         uint256 weth_balance = _WETH_TOKEN.balanceOf(address(this));
+
+        /// @dev using block.timestamp as deadline here is safe as we checked offchain one on parent function
         _RAMSES_ROUTER.addLiquidity(
-            PSM_TOKEN_ADDRESS, WETH_ADDRESS, false, psm_balance, weth_balance, 0, 0, swap.recevier, block.timestamp
+            PSM_TOKEN_ADDRESS, WETH_ADDRESS, false, psm_balance, weth_balance, 0, 0, _swap.recevier, block.timestamp
         );
+
         psm_balance = _PSM_TOKEN.balanceOf(address(this));
         weth_balance = _WETH_TOKEN.balanceOf(address(this));
         if (psm_balance > 0) _safeTransfer(PSM_TOKEN_ADDRESS, msg.sender, psm_balance);
@@ -433,7 +440,7 @@ contract Adapter is ReentrancyGuard {
             addingLiquidity(swap);
         } else {
             /// @dev If wanted token is Other than PSM.
-            swapOneInch(swap);
+            swapOneInch(swap, false);
         }
     }
     // ============================================
