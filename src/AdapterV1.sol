@@ -362,9 +362,9 @@ contract Adapter is ReentrancyGuard {
 
         /// @dev do the swap.
         _PSM_TOKEN.approve(ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT_ADDRESS, _swap.psmAmount);
-        (, uint256 spentAmount_) = _ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT._swap(_executor, _description, "", _data);
+        (, uint256 spentAmount_) = _ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT.swap(_executor, _description, "", _data);
 
-        if (!_forLiquidity){
+        if (!_forLiquidity) {
             uint256 remainAmount = _swap.psmAmount - spentAmount_;
             if (remainAmount > 0) _safeTransfer(PSM_TOKEN_ADDRESS, msg.sender, remainAmount);
         }
@@ -377,7 +377,7 @@ contract Adapter is ReentrancyGuard {
         uint256 psm_balance = _PSM_TOKEN.balanceOf(address(this));
         uint256 weth_balance = _WETH_TOKEN.balanceOf(address(this));
 
-        /// @dev using block.timestamp as deadline here is safe as we checked offchain one on parent function
+        /// @dev using block.timestamp as deadline is safe here as we checked the offchain one on parent function
         _RAMSES_ROUTER.addLiquidity(
             PSM_TOKEN_ADDRESS, WETH_ADDRESS, false, psm_balance, weth_balance, 0, 0, _swap.recevier, block.timestamp
         );
