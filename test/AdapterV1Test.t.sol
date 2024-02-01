@@ -807,7 +807,7 @@ contract AdapterTest is Test {
         uint256 balance0before = _PSM_TOKEN.balanceOf(karen);
         uint256 balance1before = _WETH_TOKEN.balanceOf(karen);
         (uint256 amountA, uint256 amountB, uint256 liquidity) = adapter.quoteAddLiquidity(10000000e18, 4e18);
-        AddLiquidity(10000000e18, 4e18, 0, 0);
+        AddLiquidity(10000000e18, 4e18, 10000000e18 / 2, 4e18 / 2);
         address pair = _RAMSES_FACTORY.getPair(PSM_TOKEN_ADDRESS, WETH_ADDRESS, false);
         assertEq(IERC20(pair).balanceOf(karen), liquidity); // 6223938189866138537600
         assertEq(balance0before - amountA, _PSM_TOKEN.balanceOf(karen));

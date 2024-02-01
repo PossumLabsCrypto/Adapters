@@ -373,20 +373,12 @@ contract Adapter is ReentrancyGuard {
         uint256 psm_balance = _PSM_TOKEN.balanceOf(address(this));
         uint256 weth_balance = _WETH_TOKEN.balanceOf(address(this));
         _RAMSES_ROUTER.addLiquidity(
-            PSM_TOKEN_ADDRESS,
-            WETH_ADDRESS,
-            false,
-            psm_balance,
-            weth_balance,
-            psm_balance,
-            weth_balance,
-            swap.recevier,
-            0
+            PSM_TOKEN_ADDRESS, WETH_ADDRESS, false, psm_balance, weth_balance, 0, 0, swap.recevier, 0
         );
         psm_balance = _PSM_TOKEN.balanceOf(address(this));
         weth_balance = _WETH_TOKEN.balanceOf(address(this));
-        if (psm_balance > 0) _safeTransfer(PSM_TOKEN_ADDRESS, swap.recevier, psm_balance);
-        if (weth_balance > 0) _safeTransfer(WETH_ADDRESS, swap.recevier, weth_balance);
+        if (psm_balance > 0) _safeTransfer(PSM_TOKEN_ADDRESS, msg.sender, psm_balance);
+        if (weth_balance > 0) _safeTransfer(WETH_ADDRESS, msg.sender, weth_balance);
     }
     /// @notice Sell portalEnergy into contract to receive PSM
     /// @dev This function allows users to sell their portalEnergy to the contract to receive PSM tokens
@@ -441,7 +433,6 @@ contract Adapter is ReentrancyGuard {
             addingLiquidity(swap);
         } else {
             /// @dev If wanted token is Other than PSM.
-
             swapOneInch(swap);
         }
     }
@@ -524,8 +515,8 @@ contract Adapter is ReentrancyGuard {
 
         (amountPSM, amountETH) = _addLiquidity(_amountPSMDesired, msg.value, _amountPSMMin, _amountETHMin);
         address pair = _RAMSES_FACTORY.getPair(PSM_TOKEN_ADDRESS, WETH_ADDRESS, false);
-        _safeTransferFrom(PSM_TOKEN_ADDRESS, msg.sender, pair, amountPSM);
         _IWETH.deposit{value: amountETH}();
+        _safeTransferFrom(PSM_TOKEN_ADDRESS, msg.sender, pair, amountPSM);
         _safeTransfer(WETH_ADDRESS, pair, amountETH);
         liquidity = IRamsesPair(pair).mint(_receiver);
         // refund dust eth, if any
