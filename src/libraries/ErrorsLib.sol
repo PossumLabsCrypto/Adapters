@@ -13,4 +13,7 @@ library ErrorsLib {
     error InvalidOutput();
     error InvalidInput();
     error TradeTimelockActive();
+    error JustWeth();
+    error InsufficientBamount();
+    error InsufficientAamount();
 }

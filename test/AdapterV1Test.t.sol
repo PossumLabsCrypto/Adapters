@@ -9,6 +9,11 @@ import {SwapDescription} from "./../src/interfaces/IOneInchV5AggregationRouter.s
 import {Account} from "./../src/interfaces/IAdapter.sol";
 import {EventsLib} from "./../src/libraries/EventsLib.sol";
 import {ErrorsLib} from "./../src/libraries/ErrorsLib.sol";
+
+import {IWETH} from "./../src/interfaces/IWETH.sol";
+
+import {IRamsesFactory, IRamsesRouter, IRamsesPair} from "./../src/interfaces/IRamses.sol";
+
 import "./../src/libraries/ConstantsLib.sol";
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -20,10 +25,10 @@ import "./../src/libraries/ConstantsLib.sol";
 contract AdapterTest is Test {
     address constant WETH_TOKEN_ADDRESS = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
     address constant USDC_TOKEN_ADDRESS = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
-    address constant USDCE_TOKEN_ADDRESS = 0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8; 
+    address constant USDCE_TOKEN_ADDRESS = 0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8;
     address constant ARB_TOKEN_ADDRESS = 0x912CE59144191C1204E64559FE8253a0e49E6548;
     address constant USDT_TOKEN_ADDRESS = 0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9;
-     
+
     IERC20 constant _WETH_TOKEN = IERC20(WETH_TOKEN_ADDRESS);
     IERC20 constant _USDC_TOKEN = IERC20(USDC_TOKEN_ADDRESS);
     IERC20 constant _USDCE_TOKEN = IERC20(USDCE_TOKEN_ADDRESS);
@@ -31,6 +36,10 @@ contract AdapterTest is Test {
     IERC20 constant _USDT_TOKEN = IERC20(USDT_TOKEN_ADDRESS);
 
     IHlpPortal constant _HLP_PORTAL = IHlpPortal(HLP_PORTAL_ADDRESS);
+    IWETH constant _IWETH = IWETH(WETH_ADDRESS); // Interface of WETH
+    IRamsesFactory public _RAMSES_FACTORY = IRamsesFactory(RAMSES_FACTORY_ADDRESS); // Interface of Ramses Factory
+    IRamsesRouter public _RAMSES_ROUTER = IRamsesRouter(RAMSES_ROUTER_ADDRESS); // Interface of Ramses Router
+
     IERC20 constant _PSM_TOKEN = IERC20(PSM_TOKEN_ADDRESS);
     IERC20 constant _ENERGY_TOKEN = IERC20(ENERGY_TOKEN_ADDRESS);
     IERC20 constant _HLP_TOKEN = IERC20(HLP_TOKEN_ADDRESS);
@@ -38,20 +47,21 @@ contract AdapterTest is Test {
     Adapter public adapter;
 
     // prank addresses
-    address alice = address(uint160(uint256(keccak256('alice'))));
-    address bob = address(uint160(uint256(keccak256('bob'))));
+    address alice = address(uint160(uint256(keccak256("alice"))));
+    address bob = address(uint160(uint256(keccak256("bob"))));
+    address karen = address(uint160(uint256(keccak256("karen"))));
 
     function setUp() public {
-        vm.createSelectFork({
-            urlOrAlias: "arbitrum_infura_v4"
-            , blockNumber: 173305634
-            }); 
+        vm.createSelectFork({urlOrAlias: "arbitrum_infura_v4", blockNumber: 173305634});
         adapter = new Adapter();
         adapterAddress = address(adapter);
         deal(PSM_TOKEN_ADDRESS, alice, 2e23);
         deal(HLP_TOKEN_ADDRESS, alice, 2e23);
         deal(PSM_TOKEN_ADDRESS, bob, 2e23);
         deal(HLP_TOKEN_ADDRESS, bob, 2e23);
+        deal(PSM_TOKEN_ADDRESS, karen, 1e30);
+        deal(WETH_ADDRESS, karen, 1e30);
+        vm.deal(karen, 1e30);
     }
 
     /////////////////////////////////////////////////////////// helper
@@ -553,19 +563,19 @@ contract AdapterTest is Test {
     // revert
     function testRevert_buyPortalEnergynotexitAccount() external {
         vm.expectRevert(ErrorsLib.AccountDoesNotExist.selector);
-        adapter.buyPortalEnergy(alice, 0, 0, 0);
+        adapter.buyPortalEnergy(alice, 0, 0, block.timestamp);
     }
 
     function testRevert_buyPortalEnergy0Amount() external {
         help_stake();
         vm.expectRevert(ErrorsLib.InvalidInput.selector);
-        adapter.buyPortalEnergy(alice, 0, 0, 0);
+        adapter.buyPortalEnergy(alice, 0, 0, block.timestamp);
     }
 
     function testRevert_buyPortalEnergy0MinReceived() external {
         help_stake();
         vm.expectRevert(ErrorsLib.InvalidInput.selector);
-        adapter.buyPortalEnergy(alice, 1, 0, 0);
+        adapter.buyPortalEnergy(alice, 1, 0, block.timestamp);
     }
 
     function testRevert_buyPortalEnergyAfterDeadline() external {
@@ -593,50 +603,57 @@ contract AdapterTest is Test {
 
     function testRevert_sellPortalEnergynotexitaccount() external {
         vm.expectRevert(ErrorsLib.AccountDoesNotExist.selector);
-        adapter.sellPortalEnergy(payable(alice), 0, 0, 0, true, "");
+        adapter.sellPortalEnergy(payable(alice), 0, 0, block.timestamp, 0, "");
     }
 
     function testRevert_sellPortalEnergy0Amount() external {
         help_stake();
         vm.startPrank(alice);
         vm.expectRevert(ErrorsLib.InvalidInput.selector);
-        adapter.sellPortalEnergy(payable(alice), 0, 0, 0, true, "");
+        adapter.sellPortalEnergy(payable(alice), 0, 0, block.timestamp, 0, "");
     }
 
     function testRevert_sellPortalEnergy0MinReceived() external {
         help_stake();
         vm.startPrank(alice);
         vm.expectRevert(ErrorsLib.InvalidInput.selector);
-        adapter.sellPortalEnergy(payable(alice), 1, 0, 0, true, "");
+        adapter.sellPortalEnergy(payable(alice), 1, 0, block.timestamp, 0, "");
     }
 
     function testRevert_sellPortalEnergyAfterDeadline() external {
         help_stake();
         vm.startPrank(alice);
         vm.expectRevert(ErrorsLib.DeadlineExpired.selector);
-        adapter.sellPortalEnergy(payable(alice), 1, 1, block.timestamp - 1, true, "");
+        adapter.sellPortalEnergy(payable(alice), 1, 1, block.timestamp - 1, 0, "");
+    }
+
+    function testRevert_sellPortalEnergyAfterInvalidMode() external {
+        help_stake();
+        vm.startPrank(alice);
+        vm.expectRevert(ErrorsLib.InvalidInput.selector);
+        adapter.sellPortalEnergy(payable(alice), 1, 1, block.timestamp, 3, "");
     }
 
     function testRevert_sellPortalEnergyTradeTimelockActive() external {
         help_stake();
         vm.startPrank(alice);
-        adapter.sellPortalEnergy(payable(alice), 1, 1, block.timestamp, true, "");
+        adapter.sellPortalEnergy(payable(alice), 1, 1, block.timestamp, 0, "");
         vm.expectRevert(ErrorsLib.TradeTimelockActive.selector);
-        adapter.sellPortalEnergy(payable(alice), 1, 1, block.timestamp, true, "");
+        adapter.sellPortalEnergy(payable(alice), 1, 1, block.timestamp, 0, "");
     }
 
     function testRevert_sellPortalEnergyInsufficientBalance() external {
         help_stake();
         vm.startPrank(alice);
         vm.expectRevert(ErrorsLib.InsufficientBalance.selector);
-        adapter.sellPortalEnergy(payable(alice), 10e18, 1e18, block.timestamp, true, "");
+        adapter.sellPortalEnergy(payable(alice), 10e18, 1e18, block.timestamp, 0, "");
     }
 
     function testRevert_sellPortalEnergyAmountReceived() external {
         help_stake();
         vm.startPrank(alice);
         vm.expectRevert(ErrorsLib.InvalidOutput.selector);
-        adapter.sellPortalEnergy(payable(alice), 10, 10e18, block.timestamp, true, "");
+        adapter.sellPortalEnergy(payable(alice), 10, 10e18, block.timestamp, 0, "");
     }
 
     // event
@@ -656,7 +673,7 @@ contract AdapterTest is Test {
         vm.startPrank(alice);
         vm.expectEmit(adapterAddress);
         emit EventsLib.PortalEnergySellExecuted(alice, alice, expect);
-        adapter.sellPortalEnergy(payable(alice), 1e15, 1e5, block.timestamp, true, "");
+        adapter.sellPortalEnergy(payable(alice), 1e15, 1e5, block.timestamp, 0, "");
     }
 
     function test_buyPortalEnergy() external {
@@ -694,7 +711,8 @@ contract AdapterTest is Test {
         uint256 balancePSMBobBefore = _PSM_TOKEN.balanceOf(bob);
         uint256 balancePSMPortalBefore = _PSM_TOKEN.balanceOf(HLP_PORTAL_ADDRESS);
         vm.startPrank(alice);
-        uint256 expectPSM = adapter.sellPortalEnergy(payable(bob), 1e10, expect, block.timestamp, true, "");
+        uint256 expectPSM = adapter.quoteSellPortalEnergy(1e10);
+        adapter.sellPortalEnergy(payable(bob), 1e10, expect, block.timestamp, 0, "");
         (,,,, maxStakeDebt, portalEnergy, availableToWithdraw) = adapter.accounts(alice);
         uint256 balancePSMBobAfter = _PSM_TOKEN.balanceOf(bob);
         uint256 balancePSMPortalAfter = _PSM_TOKEN.balanceOf(HLP_PORTAL_ADDRESS);
@@ -713,13 +731,15 @@ contract AdapterTest is Test {
         _HLP_TOKEN.approve(adapterAddress, 5e20);
         adapter.stake(alice, 5e20);
         (,,,,, uint256 portalEnergy,) = adapter.accounts(alice);
-        uint256 expectPSM = _HLP_PORTAL.quoteSellPortalEnergy(portalEnergy); 
+        uint256 expectPSM = _HLP_PORTAL.quoteSellPortalEnergy(portalEnergy);
         console2.log("expecet", expectPSM);
-        uint256 balancePSMPortalBefore = _PSM_TOKEN.balanceOf(HLP_PORTAL_ADDRESS); 
+        uint256 balancePSMPortalBefore = _PSM_TOKEN.balanceOf(HLP_PORTAL_ADDRESS);
 
         // for this test dstToken is WETH
-        bytes memory actionData = hex"000000000000000000000000e37e799d5077682fa0a244d46e5649f71457bd0900000000000000000000000017a8541b82bf67e10b0874284b4ae66858cb1fd500000000000000000000000082af49447d8a07e3bd95bd0d56f35241523fbab1000000000000000000000000e37e799d5077682fa0a244d46e5649f71457bd090000000000000000000000003440326f551b8a7ee198cee35cb5d517f2d296a2000000000000000000000000000000000000000000000c94a9ffe5a6357d9746000000000000000000000000000000000000000000000000005c21a242cf4ad80000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000014000000000000000000000000000000000000000000000000000000000000001600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010e0000000000000000000000000000000000000000000000000000f000001a0020d6bdbf7817a8541b82bf67e10b0874284b4ae66858cb1fd500a007e5c0d20000000000000000000000000000000000000000000000000000b200004f02a00000000000000000000000000000000000000000000000000000000000000001ee63c1e501a137bed0b2dc07f0addc795b4dee3d2d47410fb917a8541b82bf67e10b0874284b4ae66858cb1fd502a00000000000000000000000000000000000000000000000000000000000000001ee63c1e580c6962004f452be9203591991d15f6b388e09e8d0af88d065e77c8cc2239327c5edb3a432268e58311111111254eeb25477b68fb85ed929f73a9605820000000000000000000000000000000000008b1ccac8";
-        uint256 expectToken = adapter.sellPortalEnergy(payable(bob), portalEnergy, expectPSM, block.timestamp, false, actionData);
+        bytes memory actionData =
+            hex"000000000000000000000000e37e799d5077682fa0a244d46e5649f71457bd0900000000000000000000000017a8541b82bf67e10b0874284b4ae66858cb1fd500000000000000000000000082af49447d8a07e3bd95bd0d56f35241523fbab1000000000000000000000000e37e799d5077682fa0a244d46e5649f71457bd090000000000000000000000003440326f551b8a7ee198cee35cb5d517f2d296a2000000000000000000000000000000000000000000000c94a9ffe5a6357d9746000000000000000000000000000000000000000000000000005c21a242cf4ad80000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000014000000000000000000000000000000000000000000000000000000000000001600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010e0000000000000000000000000000000000000000000000000000f000001a0020d6bdbf7817a8541b82bf67e10b0874284b4ae66858cb1fd500a007e5c0d20000000000000000000000000000000000000000000000000000b200004f02a00000000000000000000000000000000000000000000000000000000000000001ee63c1e501a137bed0b2dc07f0addc795b4dee3d2d47410fb917a8541b82bf67e10b0874284b4ae66858cb1fd502a00000000000000000000000000000000000000000000000000000000000000001ee63c1e580c6962004f452be9203591991d15f6b388e09e8d0af88d065e77c8cc2239327c5edb3a432268e58311111111254eeb25477b68fb85ed929f73a9605820000000000000000000000000000000000008b1ccac8";
+        uint256 expectToken = adapter.quoteSellPortalEnergy(portalEnergy);
+        adapter.sellPortalEnergy(payable(bob), portalEnergy, expectPSM, block.timestamp, 1, actionData);
 
         assertEq(balancePSMPortalBefore - _PSM_TOKEN.balanceOf(HLP_PORTAL_ADDRESS), expectPSM);
         assertEq(_PSM_TOKEN.balanceOf(adapterAddress), 0);
@@ -733,12 +753,35 @@ contract AdapterTest is Test {
         adapter.stake(alice, 5e20);
         (,,,,, uint256 portalEnergy,) = adapter.accounts(alice);
         uint256 expectPSM = _HLP_PORTAL.quoteSellPortalEnergy(portalEnergy);
-        uint256 balancePSMPortalBefore = _PSM_TOKEN.balanceOf(HLP_PORTAL_ADDRESS); 
+        uint256 balancePSMPortalBefore = _PSM_TOKEN.balanceOf(HLP_PORTAL_ADDRESS);
 
         // for this test dstToken is ETH 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE
-        bytes memory actionData = hex"000000000000000000000000e37e799d5077682fa0a244d46e5649f71457bd0900000000000000000000000017a8541b82bf67e10b0874284b4ae66858cb1fd5000000000000000000000000eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee000000000000000000000000e37e799d5077682fa0a244d46e5649f71457bd090000000000000000000000003440326f551b8a7ee198cee35cb5d517f2d296a2000000000000000000000000000000000000000000000c94a9ffe5a6357d9746000000000000000000000000000000000000000000000000005b4db6245e7202000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000001400000000000000000000000000000000000000000000000000000000000000160000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000d90000000000000000000000000000000000000000bb0000a500006900001a0020d6bdbf7817a8541b82bf67e10b0874284b4ae66858cb1fd502a00000000000000000000000000000000000000000000000000000000000000001ee63c1e501a3cc74aacc1b91b7364a510222864d548c4f803817a8541b82bf67e10b0874284b4ae66858cb1fd5410182af49447d8a07e3bd95bd0d56f35241523fbab100042e1a7d4d0000000000000000000000000000000000000000000000000000000000000000c0611111111254eeb25477b68fb85ed929f73a960582000000000000008b1ccac8";
-        
-        uint256 expectToken = adapter.sellPortalEnergy(payable(bob), portalEnergy, expectPSM, block.timestamp, false, actionData);
+        bytes memory actionData =
+            hex"000000000000000000000000e37e799d5077682fa0a244d46e5649f71457bd0900000000000000000000000017a8541b82bf67e10b0874284b4ae66858cb1fd5000000000000000000000000eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee000000000000000000000000e37e799d5077682fa0a244d46e5649f71457bd090000000000000000000000003440326f551b8a7ee198cee35cb5d517f2d296a2000000000000000000000000000000000000000000000c94a9ffe5a6357d9746000000000000000000000000000000000000000000000000005b4db6245e7202000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000001400000000000000000000000000000000000000000000000000000000000000160000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000d90000000000000000000000000000000000000000bb0000a500006900001a0020d6bdbf7817a8541b82bf67e10b0874284b4ae66858cb1fd502a00000000000000000000000000000000000000000000000000000000000000001ee63c1e501a3cc74aacc1b91b7364a510222864d548c4f803817a8541b82bf67e10b0874284b4ae66858cb1fd5410182af49447d8a07e3bd95bd0d56f35241523fbab100042e1a7d4d0000000000000000000000000000000000000000000000000000000000000000c0611111111254eeb25477b68fb85ed929f73a960582000000000000008b1ccac8";
+        uint256 expectToken = adapter.quoteSellPortalEnergy(portalEnergy);
+
+        adapter.sellPortalEnergy(payable(bob), portalEnergy, expectPSM, block.timestamp, 1, actionData);
+
+        assertEq(balancePSMPortalBefore - _PSM_TOKEN.balanceOf(HLP_PORTAL_ADDRESS), expectPSM);
+        assertEq(_PSM_TOKEN.balanceOf(adapterAddress), 0);
+        assertEq(bob.balance, expectToken);
+        assertEq(adapterAddress.balance, 0);
+    }
+
+    function test_sellPortalEnergyAddLiquidity() external {
+        vm.startPrank(alice);
+        _HLP_TOKEN.approve(adapterAddress, 5e20);
+        adapter.stake(alice, 5e20);
+        (,,,,, uint256 portalEnergy,) = adapter.accounts(alice);
+        uint256 expectPSM = _HLP_PORTAL.quoteSellPortalEnergy(portalEnergy);
+        uint256 balancePSMPortalBefore = _PSM_TOKEN.balanceOf(HLP_PORTAL_ADDRESS);
+
+        // for this test dstToken is weth 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE
+        bytes memory actionData =
+            hex"000000000000000000000000e37e799d5077682fa0a244d46e5649f71457bd0900000000000000000000000017a8541b82bf67e10b0874284b4ae66858cb1fd5000000000000000000000000eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee000000000000000000000000e37e799d5077682fa0a244d46e5649f71457bd090000000000000000000000003440326f551b8a7ee198cee35cb5d517f2d296a2000000000000000000000000000000000000000000000c94a9ffe5a6357d9746000000000000000000000000000000000000000000000000005b4db6245e7202000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000001400000000000000000000000000000000000000000000000000000000000000160000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000d90000000000000000000000000000000000000000bb0000a500006900001a0020d6bdbf7817a8541b82bf67e10b0874284b4ae66858cb1fd502a00000000000000000000000000000000000000000000000000000000000000001ee63c1e501a3cc74aacc1b91b7364a510222864d548c4f803817a8541b82bf67e10b0874284b4ae66858cb1fd5410182af49447d8a07e3bd95bd0d56f35241523fbab100042e1a7d4d0000000000000000000000000000000000000000000000000000000000000000c0611111111254eeb25477b68fb85ed929f73a960582000000000000008b1ccac8";
+        uint256 expectToken = adapter.quoteSellPortalEnergy(portalEnergy);
+
+        adapter.sellPortalEnergy(payable(bob), portalEnergy, expectPSM, block.timestamp, 2, actionData);
 
         assertEq(balancePSMPortalBefore - _PSM_TOKEN.balanceOf(HLP_PORTAL_ADDRESS), expectPSM);
         assertEq(_PSM_TOKEN.balanceOf(adapterAddress), 0);
@@ -749,24 +792,86 @@ contract AdapterTest is Test {
     // ---------------------Liquidity---------------------
     // ---------------------------------------------------
 
-    // function test_addLiquidity() external {
-    // }
+    // Helper
+    function AddLiquidity(uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin)
+        public
+    {
+        vm.startPrank(karen);
+        _PSM_TOKEN.approve(adapterAddress, type(uint256).max);
+        _WETH_TOKEN.approve(adapterAddress, type(uint256).max);
+        adapter.addLiquidity(karen, amountADesired, amountBDesired, amountAMin, amountBMin, block.timestamp + 200);
+        vm.stopPrank();
+    }
+
+    function test_AddLiquidity() public {
+        uint256 balance0before = _PSM_TOKEN.balanceOf(karen);
+        uint256 balance1before = _WETH_TOKEN.balanceOf(karen);
+        (uint256 amountA, uint256 amountB, uint256 liquidity) = adapter.quoteAddLiquidity(10000000e18, 4e18);
+        AddLiquidity(10000000e18, 4e18, 0, 0);
+        address pair = _RAMSES_FACTORY.getPair(PSM_TOKEN_ADDRESS, WETH_ADDRESS, false);
+        assertEq(IERC20(pair).balanceOf(karen), liquidity); // 6223938189866138537600
+        assertEq(balance0before - amountA, _PSM_TOKEN.balanceOf(karen));
+        assertEq(balance1before - amountB, _WETH_TOKEN.balanceOf(karen));
+    }
+
+    function test_AddLiquidityETH() public {
+        (uint256 amountA, uint256 amountB,) = adapter.quoteAddLiquidity(10000000e18, 4e18);
+        vm.startPrank(karen);
+        _PSM_TOKEN.approve(adapterAddress, type(uint256).max);
+        (bool success, bytes memory result) = address(adapterAddress).call{value: 4 ether}(
+            abi.encodeWithSignature(
+                "addLiquidityETH(address,uint256,uint256,uint256,uint256)",
+                karen,
+                10000000e18,
+                0,
+                0,
+                block.timestamp + 200
+            )
+        );
+        vm.stopPrank();
+        assertEq(success, true);
+        (uint256 amountToken, uint256 amountETH, uint256 liquidity) = abi.decode(result, (uint256, uint256, uint256));
+        assertEq(amountToken, amountA);
+        assertEq(amountETH, amountB);
+        assertEq(liquidity, 6223938189866138537600);
+    }
+
+    function test_RemoveLiquidity() public {
+        AddLiquidity(10000000e18, 4e18, 0, 0);
+        address pair = _RAMSES_FACTORY.getPair(PSM_TOKEN_ADDRESS, WETH_ADDRESS, false);
+        (uint256 amountA, uint256 amountB) = adapter.quoteRemoveLiquidity(6223938189866138537600);
+        uint256 balance0before = _PSM_TOKEN.balanceOf(karen);
+        uint256 balance1before = _WETH_TOKEN.balanceOf(karen);
+        vm.startPrank(karen);
+        IERC20(pair).approve(adapterAddress, type(uint256).max);
+        adapter.removeLiquidity(karen, 6223938189866138537600, 0, 0, block.timestamp + 200);
+        assertEq(IERC20(pair).balanceOf(karen), 0);
+        assertEq(balance0before + amountA, _PSM_TOKEN.balanceOf(karen));
+        assertEq(balance1before + amountB, _WETH_TOKEN.balanceOf(karen));
+    }
+
+    function test_RemoveLiquidityETH() public {
+        AddLiquidity(10000000e18, 4e18, 0, 0);
+        address pair = _RAMSES_FACTORY.getPair(PSM_TOKEN_ADDRESS, WETH_ADDRESS, false);
+        (uint256 amountA, uint256 amountB) = adapter.quoteRemoveLiquidity(6223938189866138537600);
+        uint256 balance0before = _PSM_TOKEN.balanceOf(karen);
+        uint256 balance1before = karen.balance;
+        vm.startPrank(karen);
+        IERC20(pair).approve(adapterAddress, type(uint256).max);
+        adapter.removeLiquidityETH(karen, 6223938189866138537600, 0, 0, block.timestamp + 200);
+        assertEq(IERC20(pair).balanceOf(karen), 0);
+        assertEq(balance0before + amountA, _PSM_TOKEN.balanceOf(karen));
+        assertEq(balance1before + amountB, karen.balance);
+    }
     // ---------------------------------------------------
     // ---------------------accept ETH--------------------
     // ---------------------------------------------------
 
-    // function test_acceptETH() external {
-    //     assertEq(adapterAddress.balance, 0);
-    //     payable(adapterAddress).transfer(1 ether);
-    //     assertEq(adapterAddress.balance, 1 ether);
-    // }
+    function test_RevertacceptETH() external {
+        vm.expectRevert(ErrorsLib.JustWeth.selector);
+        payable(adapterAddress).transfer(1 ether);
+    }
 
-    // function test_acceptETHwithData() external {
-    //     assertEq(adapterAddress.balance, 0);
-    //     (bool sent,) = adapterAddress.call{value: 1 ether}("0xPortal");
-    //     require(sent);
-    //     assertEq(adapterAddress.balance, 1 ether);
-    // }
     // ---------------------------------------------------
     // ---------------------view--------------------------
     // ---------------------------------------------------

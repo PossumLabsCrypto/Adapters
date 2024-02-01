@@ -5,10 +5,12 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IHlpPortal} from "./interfaces/IHlpPortal.sol";
-import {IAdapter, Account} from "./interfaces/IAdapter.sol";
+import {IAdapter, Account, SwapData} from "./interfaces/IAdapter.sol";
 import {EventsLib} from "./libraries/EventsLib.sol";
 import {ErrorsLib} from "./libraries/ErrorsLib.sol";
 import {IOneInchV5AggregationRouter, SwapDescription} from "./interfaces/IOneInchV5AggregationRouter.sol";
+import {IWETH} from "./interfaces/IWETH.sol";
+import {IRamsesFactory, IRamsesRouter, IRamsesPair} from "./interfaces/IRamses.sol";
 import "./libraries/ConstantsLib.sol";
 
 contract Adapter is ReentrancyGuard {
@@ -16,8 +18,12 @@ contract Adapter is ReentrancyGuard {
     IERC20 constant _PSM_TOKEN = IERC20(PSM_TOKEN_ADDRESS); // the ERC20 representation of PSM token
     IERC20 constant _ENERGY_TOKEN = IERC20(ENERGY_TOKEN_ADDRESS); // the ERC20 representation of portalEnergy
     IERC20 constant _HLP_TOKEN = IERC20(HLP_TOKEN_ADDRESS); // the ERC20 representation of principal token
+    IERC20 constant _WETH_TOKEN = IERC20(WETH_ADDRESS); // the ERC20 representation of WETH token
+    IWETH constant _IWETH = IWETH(WETH_ADDRESS); // Interface of WETH
+    IRamsesFactory public _RAMSES_FACTORY = IRamsesFactory(RAMSES_FACTORY_ADDRESS); // Interface of Ramses Factory
+    IRamsesRouter public _RAMSES_ROUTER = IRamsesRouter(RAMSES_ROUTER_ADDRESS); // Interface of Ramses Router
     IOneInchV5AggregationRouter constant _ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT =
-    IOneInchV5AggregationRouter(ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT_ADDRESS); // Interface of 1inchRouter
+        IOneInchV5AggregationRouter(ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT_ADDRESS); // Interface of 1inchRouter
 
     uint256 public totalPrincipalStaked; // shows how much principal is staked by all users combined
 
@@ -25,13 +31,17 @@ contract Adapter is ReentrancyGuard {
 
     constructor() {}
 
-
     // ============================================
     // ==               MODIFIERS                ==
     // ============================================
 
     modifier existingAccount(address _user) {
-        if(!accounts[_user].isExist) revert ErrorsLib.AccountDoesNotExist();
+        if (!accounts[_user].isExist) revert ErrorsLib.AccountDoesNotExist();
+        _;
+    }
+
+    modifier ensure(uint256 _deadline) {
+        if (_deadline < block.timestamp) revert ErrorsLib.DeadlineExpired();
         _;
     }
 
@@ -109,8 +119,8 @@ contract Adapter is ReentrancyGuard {
     /// @param _amount The amount of tokens to stake
     /// @param _user The user whom staked for
     function stake(address _user, uint256 _amount) external nonReentrant {
-        if(_user == address(0)) revert ErrorsLib.InvalidInput();
-        if(_amount == 0) revert ErrorsLib.InvalidInput();
+        if (_user == address(0)) revert ErrorsLib.InvalidInput();
+        if (_amount == 0) revert ErrorsLib.InvalidInput();
 
         Account memory account = accounts[_user].isExist ? _updateAccount(_user, _amount) : _createAccount(_amount);
         accounts[_user] = account;
@@ -129,7 +139,7 @@ contract Adapter is ReentrancyGuard {
             account.availableToWithdraw
         );
 
-        _HLP_TOKEN.safeTransferFrom(msg.sender, address(this), _amount);
+        _safeTransferFrom(HLP_TOKEN_ADDRESS, msg.sender, address(this), _amount);
         _HLP_TOKEN.approve(HLP_PORTAL_ADDRESS, _amount);
         _HLP_PORTAL.stake(_amount);
     }
@@ -147,10 +157,10 @@ contract Adapter is ReentrancyGuard {
     /// @dev It emits an event with the updated stake information
     /// @param _amount The amount of tokens to unstake
     function unstake(uint256 _amount) external nonReentrant existingAccount(msg.sender) {
-        if(_amount == 0) revert ErrorsLib.InvalidInput();
+        if (_amount == 0) revert ErrorsLib.InvalidInput();
 
         Account memory account = _updateAccount(msg.sender, 0);
-        if(_amount > account.availableToWithdraw) revert ErrorsLib.InsufficientToWithdraw();
+        if (_amount > account.availableToWithdraw) revert ErrorsLib.InsufficientToWithdraw();
 
         /// @dev Update the user's stake info & cache to memory
         uint256 maxLockDuration = _HLP_PORTAL.maxLockDuration();
@@ -188,7 +198,7 @@ contract Adapter is ReentrancyGuard {
         uint256 availableAmount = balanceAfter - balanceBefore;
 
         /// @dev Send the principal tokens to the user
-        _HLP_TOKEN.safeTransfer(msg.sender, availableAmount);
+        _safeTransfer(HLP_TOKEN_ADDRESS, msg.sender, availableAmount);
     }
 
     /// @dev As HLP Portal has trade time lock, check it here.
@@ -216,10 +226,10 @@ contract Adapter is ReentrancyGuard {
         if (portalEnergy < maxStakeDebt) {
             uint256 remainingDebt = maxStakeDebt - portalEnergy;
             /// @dev Require that the user has enough Portal Energy Tokens
-            if(_ENERGY_TOKEN.balanceOf(address(msg.sender)) < remainingDebt) revert ErrorsLib.InsufficientPEtokens();
-            if(!_checkLastTrade()) revert ErrorsLib.TradeTimelockActive();
+            if (_ENERGY_TOKEN.balanceOf(address(msg.sender)) < remainingDebt) revert ErrorsLib.InsufficientPEtokens();
+            if (!_checkLastTrade()) revert ErrorsLib.TradeTimelockActive();
             /// @dev Burn the appropriate portalEnergyToken from the user's wallet to increase portalEnergy sufficiently
-            _ENERGY_TOKEN.safeTransferFrom(msg.sender, address(this), remainingDebt);
+            _safeTransferFrom(ENERGY_TOKEN_ADDRESS, msg.sender, address(this), remainingDebt);
             _ENERGY_TOKEN.approve(HLP_PORTAL_ADDRESS, remainingDebt);
             _HLP_PORTAL.burnPortalEnergyToken(address(this), remainingDebt);
             portalEnergy += remainingDebt;
@@ -245,7 +255,7 @@ contract Adapter is ReentrancyGuard {
         _HLP_PORTAL.unstake(balance);
         uint256 balanceAfter = _HLP_TOKEN.balanceOf(address(this));
         uint256 availableAmount = balanceAfter - balanceBefore;
-        _HLP_TOKEN.safeTransfer(msg.sender, availableAmount);
+        _safeTransfer(HLP_TOKEN_ADDRESS, msg.sender, availableAmount);
     }
 
     // ============================================
@@ -260,11 +270,11 @@ contract Adapter is ReentrancyGuard {
         nonReentrant
         existingAccount(msg.sender)
     {
-        if(_amount == 0) revert ErrorsLib.InvalidInput();
-        if(_recipient == address(0)) revert ErrorsLib.InvalidInput();
-        if(!_checkLastTrade()) revert ErrorsLib.TradeTimelockActive();
+        if (_amount == 0) revert ErrorsLib.InvalidInput();
+        if (_recipient == address(0)) revert ErrorsLib.InvalidInput();
+        if (!_checkLastTrade()) revert ErrorsLib.TradeTimelockActive();
         Account memory account = _updateAccount(msg.sender, 0);
-        if(account.portalEnergy < _amount) revert ErrorsLib.InsufficientBalance();
+        if (account.portalEnergy < _amount) revert ErrorsLib.InsufficientBalance();
 
         /// @dev Reduce the portalEnergy of the caller by the amount of portal energy tokens to be minted
         account.portalEnergy = account.portalEnergy - _amount;
@@ -285,14 +295,14 @@ contract Adapter is ReentrancyGuard {
         nonReentrant
         existingAccount(_recipient)
     {
-        if(_recipient == address(0)) revert ErrorsLib.InvalidInput();
-        if(_amount == 0) revert ErrorsLib.InvalidInput();
-        if(!_checkLastTrade()) revert ErrorsLib.TradeTimelockActive();
+        if (_recipient == address(0)) revert ErrorsLib.InvalidInput();
+        if (_amount == 0) revert ErrorsLib.InvalidInput();
+        if (!_checkLastTrade()) revert ErrorsLib.TradeTimelockActive();
 
         /// @dev Require that the caller has sufficient tokens to burn
-        if(_ENERGY_TOKEN.balanceOf(msg.sender) < _amount) revert ErrorsLib.InsufficientBalance();
+        if (_ENERGY_TOKEN.balanceOf(msg.sender) < _amount) revert ErrorsLib.InsufficientBalance();
 
-        _ENERGY_TOKEN.safeTransferFrom(msg.sender, address(this), _amount);
+        _safeTransferFrom(ENERGY_TOKEN_ADDRESS, msg.sender, address(this), _amount);
         _ENERGY_TOKEN.approve(HLP_PORTAL_ADDRESS, _amount);
         _HLP_PORTAL.burnPortalEnergyToken(address(this), _amount);
 
@@ -323,15 +333,15 @@ contract Adapter is ReentrancyGuard {
     function buyPortalEnergy(address _user, uint256 _amount, uint256 _minReceived, uint256 _deadline)
         external
         nonReentrant
+        ensure(_deadline)
         existingAccount(_user)
     {
-        if(_amount == 0) revert ErrorsLib.InvalidInput();
-        if(_minReceived == 0) revert ErrorsLib.InvalidInput();
-        if(_deadline < block.timestamp) revert ErrorsLib.DeadlineExpired();
-        if(!_checkLastTrade()) revert ErrorsLib.TradeTimelockActive();
-        if(_PSM_TOKEN.balanceOf(msg.sender) < _amount) revert ErrorsLib.InsufficientBalance();
+        if (_amount == 0) revert ErrorsLib.InvalidInput();
+        if (_minReceived == 0) revert ErrorsLib.InvalidInput();
+        if (!_checkLastTrade()) revert ErrorsLib.TradeTimelockActive();
+        if (_PSM_TOKEN.balanceOf(msg.sender) < _amount) revert ErrorsLib.InsufficientBalance();
         uint256 amountReceived = _HLP_PORTAL.quoteBuyPortalEnergy(_amount);
-        if(amountReceived < _minReceived) revert ErrorsLib.InvalidOutput();
+        if (amountReceived < _minReceived) revert ErrorsLib.InvalidOutput();
         /// @dev Update the stake data of the user
         Account memory account = _updateAccount(_user, 0);
 
@@ -340,23 +350,43 @@ contract Adapter is ReentrancyGuard {
 
         emit EventsLib.PortalEnergyBuyExecuted(msg.sender, _user, amountReceived);
 
-        _PSM_TOKEN.safeTransferFrom(msg.sender, address(this), _amount);
+        _safeTransferFrom(PSM_TOKEN_ADDRESS, msg.sender, address(this), _amount);
         _PSM_TOKEN.approve(HLP_PORTAL_ADDRESS, _amount);
         _HLP_PORTAL.buyPortalEnergy(_amount, _minReceived, _deadline);
     }
 
-    function swapOneInch(address _receiver, uint256 amountReceived, bytes calldata _actionData) internal returns(uint256) {
+    function swapOneInch(SwapData memory swap) internal {
         /// @dev decode the data.
-        (address _executor, SwapDescription memory _description, bytes memory _data) = abi.decode(_actionData, (address, SwapDescription, bytes));
+        (address _executor, SwapDescription memory _description, bytes memory _data) =
+            abi.decode(swap.actionData, (address, SwapDescription, bytes));
 
         /// @dev do the swap.
-        _PSM_TOKEN.approve(ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT_ADDRESS, amountReceived);
-        (uint256 returnAmount_, uint256 spentAmount_) = _ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT.swap(_executor, _description, "", _data);
+        _PSM_TOKEN.approve(ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT_ADDRESS, swap.psmAmount);
+        (, uint256 spentAmount_) = _ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT.swap(_executor, _description, "", _data);
 
-        uint256 remainAmount = amountReceived - spentAmount_ ;
-        if(remainAmount > 0) _PSM_TOKEN.safeTransfer(_receiver, remainAmount);
-        
-        return returnAmount_;
+        uint256 remainAmount = swap.psmAmount - spentAmount_;
+        if (remainAmount > 0) _safeTransfer(PSM_TOKEN_ADDRESS, swap.recevier, remainAmount);
+    }
+
+    function addingLiquidity(SwapData memory swap) internal {
+        swapOneInch(swap);
+        uint256 psm_balance = _PSM_TOKEN.balanceOf(address(this));
+        uint256 weth_balance = _WETH_TOKEN.balanceOf(address(this));
+        _RAMSES_ROUTER.addLiquidity(
+            PSM_TOKEN_ADDRESS,
+            WETH_ADDRESS,
+            false,
+            psm_balance,
+            weth_balance,
+            psm_balance,
+            weth_balance,
+            swap.recevier,
+            0
+        );
+        psm_balance = _PSM_TOKEN.balanceOf(address(this));
+        weth_balance = _WETH_TOKEN.balanceOf(address(this));
+        if (psm_balance > 0) _safeTransfer(PSM_TOKEN_ADDRESS, swap.recevier, psm_balance);
+        if (weth_balance > 0) _safeTransfer(WETH_ADDRESS, swap.recevier, weth_balance);
     }
     /// @notice Sell portalEnergy into contract to receive PSM
     /// @dev This function allows users to sell their portalEnergy to the contract to receive PSM tokens
@@ -372,26 +402,27 @@ contract Adapter is ReentrancyGuard {
     /// @param _amount The amount of portalEnergy to sell
     /// @param _minReceivedPSM The minimum amount of PSM tokens to receive
     /// @param _deadline The time that trx in valid
-    /// @param _psm if uesr wants PSM token (true)
+    /// @param _mode if user wants PSM token (0), if wants to add liquity (1), if wants other tokens (2)
     /// @param _actionData The data that calculate via oneInch API, offline
+
     function sellPortalEnergy(
         address payable _receiver,
         uint256 _amount,
         uint256 _minReceivedPSM,
         uint256 _deadline,
-        bool _psm,
+        uint256 _mode,
         bytes calldata _actionData
-    ) external nonReentrant existingAccount(msg.sender) returns (uint256) {
+    ) external nonReentrant ensure(_deadline) existingAccount(msg.sender) {
         /// @dev validated input arguments
         if (_receiver == address(0)) revert ErrorsLib.InvalidInput();
         if (_amount == 0) revert ErrorsLib.InvalidInput();
         if (_minReceivedPSM == 0) revert ErrorsLib.InvalidInput();
-        if(_deadline < block.timestamp) revert ErrorsLib.DeadlineExpired();
-        if(!_checkLastTrade()) revert ErrorsLib.TradeTimelockActive();
+        if (_mode > 2) revert ErrorsLib.InvalidInput();
+        if (!_checkLastTrade()) revert ErrorsLib.TradeTimelockActive();
         Account memory account = _updateAccount(msg.sender, 0);
-        if(account.portalEnergy < _amount) revert ErrorsLib.InsufficientBalance();
+        if (account.portalEnergy < _amount) revert ErrorsLib.InsufficientBalance();
         uint256 amountReceived = _HLP_PORTAL.quoteSellPortalEnergy(_amount);
-        if(amountReceived < _minReceivedPSM) revert ErrorsLib.InvalidOutput();
+        if (amountReceived < _minReceivedPSM) revert ErrorsLib.InvalidOutput();
 
         /// @dev Update the stake data of the user
         account.portalEnergy = account.portalEnergy - _amount;
@@ -401,21 +432,137 @@ contract Adapter is ReentrancyGuard {
 
         /// @dev Sell energy in Portal and get PSM
         _HLP_PORTAL.sellPortalEnergy(_amount, _minReceivedPSM, _deadline);
-
+        SwapData memory swap = SwapData(_receiver, amountReceived, _actionData);
         /// @dev If wanted token is PSM, transfer it
-        if (_psm) {
-            _PSM_TOKEN.safeTransfer(_receiver, amountReceived);
-            return amountReceived;
-        }
-        /// @dev If wanted token is Other than PSM.
-        return swapOneInch(_receiver, amountReceived, _actionData);
-    }
+        if (_mode == 0) {
+            _safeTransfer(PSM_TOKEN_ADDRESS, _receiver, amountReceived);
+        } else if (_mode == 1) {
+            /// @dev If wanted adding liquidity
+            addingLiquidity(swap);
+        } else {
+            /// @dev If wanted token is Other than PSM.
 
+            swapOneInch(swap);
+        }
+    }
     // ============================================
     // ==               LIQUIDITY                ==
     // ============================================
 
-    // function addLiquidity() external {}
+    // given some amount of an asset and pair reserves, returns an equivalent amount of the other asset
+    function quoteLiquidity(uint256 amountA, uint256 reserveA, uint256 reserveB)
+        internal
+        pure
+        returns (uint256 amountB)
+    {
+        if (amountA == 0) revert ErrorsLib.InvalidInput();
+        if (reserveA == 0 || reserveB == 0) revert ErrorsLib.InvalidInput();
+        amountB = (amountA * reserveB) / reserveA;
+    }
+
+    function _addLiquidity(uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin)
+        internal
+        returns (uint256 amountA, uint256 amountB)
+    {
+        if (amountADesired < amountAMin) revert ErrorsLib.InvalidInput();
+        if (amountBDesired < amountBMin) revert ErrorsLib.InvalidInput();
+        // create the pair if it doesn't exist yet
+        address pair = _RAMSES_FACTORY.getPair(PSM_TOKEN_ADDRESS, WETH_ADDRESS, false);
+        if (pair == address(0)) {
+            pair = _RAMSES_FACTORY.createPair(PSM_TOKEN_ADDRESS, WETH_ADDRESS, false);
+        }
+        (uint256 reserveA, uint256 reserveB,) = IRamsesPair(pair).getReserves();
+        if (reserveA == 0 && reserveB == 0) {
+            (amountA, amountB) = (amountADesired, amountBDesired);
+        } else {
+            uint256 amountBOptimal = quoteLiquidity(amountADesired, reserveA, reserveB);
+            if (amountBOptimal <= amountBDesired) {
+                if (amountBOptimal < amountBMin) revert ErrorsLib.InsufficientBamount();
+                (amountA, amountB) = (amountADesired, amountBOptimal);
+            } else {
+                uint256 amountAOptimal = quoteLiquidity(amountBDesired, reserveB, reserveA);
+                if (amountAOptimal > amountADesired) revert ErrorsLib.InvalidOutput();
+                if (amountAOptimal < amountAMin) revert ErrorsLib.InsufficientAamount();
+                (amountA, amountB) = (amountAOptimal, amountBDesired);
+            }
+        }
+    }
+
+    function addLiquidity(
+        address _receiver,
+        uint256 _amountPSMDesired,
+        uint256 _amountWETHDesired,
+        uint256 _amountPSMMin,
+        uint256 _amountWETHMin,
+        uint256 _deadline
+    ) external nonReentrant ensure(_deadline) returns (uint256 amountPSM, uint256 amountWETH, uint256 liquidity) {
+        /// @dev validated input arguments
+        if (_receiver == address(0)) revert ErrorsLib.InvalidInput();
+
+        (amountPSM, amountWETH) = _addLiquidity(_amountPSMDesired, _amountWETHDesired, _amountPSMMin, _amountWETHMin);
+        address pair = _RAMSES_FACTORY.getPair(PSM_TOKEN_ADDRESS, WETH_ADDRESS, false);
+        _safeTransferFrom(PSM_TOKEN_ADDRESS, msg.sender, pair, amountPSM);
+        _safeTransferFrom(WETH_ADDRESS, msg.sender, pair, amountWETH);
+        liquidity = IRamsesPair(pair).mint(_receiver);
+    }
+
+    function addLiquidityETH(
+        address _receiver,
+        uint256 _amountPSMDesired,
+        uint256 _amountPSMMin,
+        uint256 _amountETHMin,
+        uint256 _deadline
+    )
+        external
+        payable
+        nonReentrant
+        ensure(_deadline)
+        returns (uint256 amountPSM, uint256 amountETH, uint256 liquidity)
+    {
+        /// @dev validated input arguments
+        if (_receiver == address(0)) revert ErrorsLib.InvalidInput();
+
+        (amountPSM, amountETH) = _addLiquidity(_amountPSMDesired, msg.value, _amountPSMMin, _amountETHMin);
+        address pair = _RAMSES_FACTORY.getPair(PSM_TOKEN_ADDRESS, WETH_ADDRESS, false);
+        _safeTransferFrom(PSM_TOKEN_ADDRESS, msg.sender, pair, amountPSM);
+        _IWETH.deposit{value: amountETH}();
+        _safeTransfer(WETH_ADDRESS, pair, amountETH);
+        liquidity = IRamsesPair(pair).mint(_receiver);
+        // refund dust eth, if any
+        if (msg.value > amountETH) {
+            _safeTransferETH(msg.sender, msg.value - amountETH);
+        }
+    }
+
+    function removeLiquidity(
+        address _receiver,
+        uint256 _liquidity,
+        uint256 _amountPSMMin,
+        uint256 _amountWETHMin,
+        uint256 _deadline
+    ) public nonReentrant ensure(_deadline) returns (uint256 amountPSM, uint256 amountWETH) {
+        /// @dev validated input arguments
+        if (_receiver == address(0)) revert ErrorsLib.InvalidInput();
+
+        address pair = _RAMSES_FACTORY.getPair(PSM_TOKEN_ADDRESS, WETH_ADDRESS, false);
+        _safeTransferFrom(pair, msg.sender, pair, _liquidity); // send liquidity to pair
+        (amountPSM, amountWETH) = IRamsesPair(pair).burn(_receiver);
+        if (_amountPSMMin >= amountPSM) revert ErrorsLib.InvalidOutput();
+        if (_amountWETHMin >= amountWETH) revert ErrorsLib.InvalidOutput();
+    }
+
+    function removeLiquidityETH(
+        address _receiver,
+        uint256 _liquidity,
+        uint256 _amountPSMMin,
+        uint256 _amountETHMin,
+        uint256 _deadline
+    ) external returns (uint256 amountPSM, uint256 amountETH) {
+        (amountPSM, amountETH) = removeLiquidity(address(this), _liquidity, _amountPSMMin, _amountETHMin, _deadline);
+        _IWETH.withdraw(amountETH);
+        _safeTransfer(PSM_TOKEN_ADDRESS, _receiver, amountPSM);
+        _safeTransferETH(_receiver, amountETH);
+    }
 
     // ============================================
     // ==              VIEW EXTERNAL             ==
@@ -468,6 +615,40 @@ contract Adapter is ReentrancyGuard {
         return _HLP_PORTAL.quoteSellPortalEnergy(_amountInput);
     }
 
-    // receive() external payable {}
-    // fallback() external payable {}
+    function quoteAddLiquidity(uint256 _amountPSMDesired, uint256 _amountWETHDesired)
+        external
+        view
+        returns (uint256 amountA, uint256 amountB, uint256 liquidity)
+    {
+        return _RAMSES_ROUTER.quoteAddLiquidity(
+            PSM_TOKEN_ADDRESS, WETH_ADDRESS, false, _amountPSMDesired, _amountWETHDesired
+        );
+    }
+
+    function quoteRemoveLiquidity(uint256 _liquidity) external view returns (uint256 amountA, uint256 amountB) {
+        return _RAMSES_ROUTER.quoteRemoveLiquidity(PSM_TOKEN_ADDRESS, WETH_ADDRESS, false, _liquidity);
+    }
+
+    // HELPER FUNCTIONS
+    function _safeTransferETH(address to, uint256 value) internal {
+        (bool success,) = to.call{value: value}(new bytes(0));
+        require(success, "TransferHelper: ETH_TRANSFER_FAILED");
+    }
+
+    function _safeTransfer(address token, address to, uint256 value) internal {
+        require(token.code.length > 0);
+        (bool success, bytes memory data) = token.call(abi.encodeWithSelector(IERC20.transfer.selector, to, value));
+        require(success && (data.length == 0 || abi.decode(data, (bool))));
+    }
+
+    function _safeTransferFrom(address token, address from, address to, uint256 value) internal {
+        require(token.code.length > 0);
+        (bool success, bytes memory data) =
+            token.call(abi.encodeWithSelector(IERC20.transferFrom.selector, from, to, value));
+        require(success && (data.length == 0 || abi.decode(data, (bool))));
+    }
+
+    receive() external payable {
+        if (msg.sender != address(WETH_ADDRESS)) revert ErrorsLib.JustWeth(); // only accept ETH via fallback from the WETH contract
+    }
 }

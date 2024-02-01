@@ -11,8 +11,13 @@ struct Account {
     uint256 availableToWithdraw;
 }
 
-interface IAdapter {
+struct SwapData {
+    address recevier;
+    uint256 psmAmount;
+    bytes actionData;
+}
 
+interface IAdapter {
     function stake(address _receiver, uint256 _amount) external;
 
     function unstake(uint256 _amount) external;
@@ -25,7 +30,47 @@ interface IAdapter {
 
     function buyPortalEnergy(address _user, uint256 _amount, uint256 _minReceived, uint256 _deadline) external;
 
-    function sellPortalEnergy(address _receiver, uint256 _amount, uint256 _minReceivedPSM, uint256 _deadline, bool _psm, bytes calldata _actionData) external;
+    function sellPortalEnergy(
+        address payable _receiver,
+        uint256 _amount,
+        uint256 _minReceivedPSM,
+        uint256 _deadline,
+        uint256 _mode,
+        bytes calldata _actionData
+    ) external;
+
+    function addLiquidity(
+        address _receiver,
+        uint256 amountPSMDesired,
+        uint256 amountWETHDesired,
+        uint256 amountPSMMin,
+        uint256 amountWETHMin,
+        uint256 _deadline
+    ) external returns (uint256 amountPSM, uint256 amountWETH, uint256 liquidity);
+
+    function addLiquidityETH(
+        address _receiver,
+        uint256 _amountPSMDesired,
+        uint256 _amountPSMMin,
+        uint256 _amountETHMin,
+        uint256 _deadline
+    ) external payable returns (uint256 amountPSM, uint256 amountETH, uint256 liquidity);
+
+    function removeLiquidity(
+        address _receiver,
+        uint256 _liquidity,
+        uint256 _amountPSMMin,
+        uint256 _amountWETHMin,
+        uint256 _deadline
+    ) external returns (uint256 amountPSM, uint256 amountWETH);
+
+    function removeLiquidityETH(
+        address _receiver,
+        uint256 _liquidity,
+        uint256 _amountPSMMin,
+        uint256 _amountETHMin,
+        uint256 _deadline
+    ) external returns (uint256 amountPSM, uint256 amountETH);
 
     function getUpdateAccount(address _user, uint256 _amount)
         external
@@ -38,4 +83,10 @@ interface IAdapter {
 
     function quoteSellPortalEnergy(uint256 _amountInput) external view returns (uint256);
 
+    function quoteAddLiquidity(uint256 _amountADesired, uint256 _amountBDesired)
+        external
+        view
+        returns (uint256 _amountPSMDesired, uint256 _amountWETHDesired, uint256 liquidity);
+
+    function quoteRemoveLiquidity(uint256 _liquidity) external view returns (uint256 amountA, uint256 amountB);
 }
