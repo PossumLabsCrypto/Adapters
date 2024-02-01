@@ -356,9 +356,10 @@ contract Adapter is ReentrancyGuard {
     }
 
     function swapOneInch(SwapData memory _swap, bool _forLiquidity) internal {
-        /// @dev decode the data.
-        (address _executor, SwapDescription memory _description, bytes memory _data) =
-            abi.decode(_swap.actionData, (address, SwapDescription, bytes));
+        
+        /// @dev decode the data for getting _executor, _description, _data.
+        (address _executor, SwapDescription memory _description, bytes memory _data,,) =
+            abi.decode(_swap.actionData, (address, SwapDescription, bytes, uint256, uint256));
 
         /// @dev do the swap.
         _PSM_TOKEN.approve(ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT_ADDRESS, _swap.psmAmount);
@@ -371,7 +372,12 @@ contract Adapter is ReentrancyGuard {
     }
 
     function addingLiquidity(SwapData memory _swap) internal {
+
         swapOneInch(_swap, true);
+        
+        /// @dev decode the data for getting minPSM and minWETH.
+        (,,,uint256 minPSM, uint256 minWeth) =
+            abi.decode(_swap.actionData, (address, SwapDescription, bytes, uint256, uint256));
 
         /// @dev this contract shouldn't hold any token, so we pass all tokens.
         uint256 psm_balance = _PSM_TOKEN.balanceOf(address(this));
@@ -379,7 +385,7 @@ contract Adapter is ReentrancyGuard {
 
         /// @dev using block.timestamp as deadline is safe here as we checked the offchain one on parent function
         _RAMSES_ROUTER.addLiquidity(
-            PSM_TOKEN_ADDRESS, WETH_ADDRESS, false, psm_balance, weth_balance, 0, 0, _swap.recevier, block.timestamp
+            PSM_TOKEN_ADDRESS, WETH_ADDRESS, false, psm_balance, weth_balance, minPSM, minWeth, _swap.recevier, block.timestamp
         );
 
         psm_balance = _PSM_TOKEN.balanceOf(address(this));
