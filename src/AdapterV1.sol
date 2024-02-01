@@ -373,7 +373,7 @@ contract Adapter is ReentrancyGuard {
         uint256 psm_balance = _PSM_TOKEN.balanceOf(address(this));
         uint256 weth_balance = _WETH_TOKEN.balanceOf(address(this));
         _RAMSES_ROUTER.addLiquidity(
-            PSM_TOKEN_ADDRESS, WETH_ADDRESS, false, psm_balance, weth_balance, 0, 0, swap.recevier, 0
+            PSM_TOKEN_ADDRESS, WETH_ADDRESS, false, psm_balance, weth_balance, 0, 0, swap.recevier, block.timestamp
         );
         psm_balance = _PSM_TOKEN.balanceOf(address(this));
         weth_balance = _WETH_TOKEN.balanceOf(address(this));
