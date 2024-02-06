@@ -381,23 +381,16 @@ contract Adapter is ReentrancyGuard {
         uint256 psm_balance = _PSM_TOKEN.balanceOf(address(this));
         uint256 weth_balance = _WETH_TOKEN.balanceOf(address(this));
 
-        /// @dev using block.timestamp as deadline is safe here as we checked the offchain one on parent function
-        _RAMSES_ROUTER.addLiquidity(
-            PSM_TOKEN_ADDRESS,
-            WETH_ADDRESS,
-            false,
-            psm_balance,
-            weth_balance,
-            minPSM,
-            minWeth,
-            _swap.recevier,
-            block.timestamp
-        );
+        (uint256 amountPSM, uint256 amountWETH) = _addLiquidity(psm_balance, weth_balance, minPSM, minWeth);
+        address pair = _RAMSES_FACTORY.getPair(PSM_TOKEN_ADDRESS, WETH_ADDRESS, false);
+        _PSM_TOKEN.safeTransfer(pair, amountPSM);
+        _WETH_TOKEN.safeTransfer(pair, amountWETH);
+        IRamsesPair(pair).mint(_swap.recevier);
 
-        psm_balance = _PSM_TOKEN.balanceOf(address(this));
-        weth_balance = _WETH_TOKEN.balanceOf(address(this));
-        if (psm_balance > 0) _PSM_TOKEN.safeTransfer(msg.sender, psm_balance);
-        if (weth_balance > 0) _WETH_TOKEN.safeTransfer(msg.sender, weth_balance);
+        uint256 remain_PSM = psm_balance - amountPSM;
+        uint256 remain_WETH = weth_balance - amountWETH;
+        if (remain_PSM > 0) _PSM_TOKEN.safeTransfer(msg.sender, psm_balance);
+        if (remain_WETH > 0) _WETH_TOKEN.safeTransfer(msg.sender, weth_balance);
     }
     /// @notice Sell portalEnergy into contract to receive PSM
     /// @dev This function allows users to sell their portalEnergy to the contract to receive PSM tokens
