@@ -2,5 +2,8 @@
 src = "src"
 out = "out"
 libs = ["lib"]
-
+remappings = ["@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/"] # v4.9.3
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
+
+[rpc_endpoints]
+arbitrum_infura_v4 = "https://arbitrum-mainnet.infura.io/v3/${infura_api_key_4}"
