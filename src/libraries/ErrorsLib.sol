@@ -16,4 +16,5 @@ library ErrorsLib {
     error JustWeth();
     error InsufficientBamount();
     error InsufficientAamount();
+    error ETHTransferFailed();
 }

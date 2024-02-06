@@ -139,7 +139,7 @@ contract Adapter is ReentrancyGuard {
             account.availableToWithdraw
         );
 
-        _safeTransferFrom(HLP_TOKEN_ADDRESS, msg.sender, address(this), _amount);
+        _HLP_TOKEN.safeTransferFrom(msg.sender, address(this), _amount);
         _HLP_TOKEN.approve(HLP_PORTAL_ADDRESS, _amount);
         _HLP_PORTAL.stake(_amount);
     }
@@ -198,7 +198,7 @@ contract Adapter is ReentrancyGuard {
         uint256 availableAmount = balanceAfter - balanceBefore;
 
         /// @dev Send the principal tokens to the user
-        _safeTransfer(HLP_TOKEN_ADDRESS, msg.sender, availableAmount);
+        _HLP_TOKEN.safeTransfer(msg.sender, availableAmount);
     }
 
     /// @dev As HLP Portal has trade time lock, check it here.
@@ -229,7 +229,7 @@ contract Adapter is ReentrancyGuard {
             if (_ENERGY_TOKEN.balanceOf(address(msg.sender)) < remainingDebt) revert ErrorsLib.InsufficientPEtokens();
             if (!_checkLastTrade()) revert ErrorsLib.TradeTimelockActive();
             /// @dev Burn the appropriate portalEnergyToken from the user's wallet to increase portalEnergy sufficiently
-            _safeTransferFrom(ENERGY_TOKEN_ADDRESS, msg.sender, address(this), remainingDebt);
+            _ENERGY_TOKEN.safeTransferFrom(msg.sender, address(this), remainingDebt);
             _ENERGY_TOKEN.approve(HLP_PORTAL_ADDRESS, remainingDebt);
             _HLP_PORTAL.burnPortalEnergyToken(address(this), remainingDebt);
             portalEnergy += remainingDebt;
@@ -255,7 +255,7 @@ contract Adapter is ReentrancyGuard {
         _HLP_PORTAL.unstake(balance);
         uint256 balanceAfter = _HLP_TOKEN.balanceOf(address(this));
         uint256 availableAmount = balanceAfter - balanceBefore;
-        _safeTransfer(HLP_TOKEN_ADDRESS, msg.sender, availableAmount);
+        _HLP_TOKEN.safeTransfer(msg.sender, availableAmount);
     }
 
     // ============================================
@@ -302,7 +302,7 @@ contract Adapter is ReentrancyGuard {
         /// @dev Require that the caller has sufficient tokens to burn
         if (_ENERGY_TOKEN.balanceOf(msg.sender) < _amount) revert ErrorsLib.InsufficientBalance();
 
-        _safeTransferFrom(ENERGY_TOKEN_ADDRESS, msg.sender, address(this), _amount);
+        _ENERGY_TOKEN.safeTransferFrom(msg.sender, address(this), _amount);
         _ENERGY_TOKEN.approve(HLP_PORTAL_ADDRESS, _amount);
         _HLP_PORTAL.burnPortalEnergyToken(address(this), _amount);
 
@@ -350,13 +350,12 @@ contract Adapter is ReentrancyGuard {
 
         emit EventsLib.PortalEnergyBuyExecuted(msg.sender, _user, amountReceived);
 
-        _safeTransferFrom(PSM_TOKEN_ADDRESS, msg.sender, address(this), _amount);
+        _PSM_TOKEN.safeTransferFrom(msg.sender, address(this), _amount);
         _PSM_TOKEN.approve(HLP_PORTAL_ADDRESS, _amount);
         _HLP_PORTAL.buyPortalEnergy(_amount, _minReceived, _deadline);
     }
 
     function swapOneInch(SwapData memory _swap, bool _forLiquidity) internal {
-        
         /// @dev decode the data for getting _executor, _description, _data.
         (address _executor, SwapDescription memory _description, bytes memory _data,,) =
             abi.decode(_swap.actionData, (address, SwapDescription, bytes, uint256, uint256));
@@ -367,16 +366,15 @@ contract Adapter is ReentrancyGuard {
 
         if (!_forLiquidity) {
             uint256 remainAmount = _swap.psmAmount - spentAmount_;
-            if (remainAmount > 0) _safeTransfer(PSM_TOKEN_ADDRESS, msg.sender, remainAmount);
+            if (remainAmount > 0) _PSM_TOKEN.safeTransfer(msg.sender, remainAmount);
         }
     }
 
     function addingLiquidity(SwapData memory _swap) internal {
-
         swapOneInch(_swap, true);
-        
+
         /// @dev decode the data for getting minPSM and minWETH.
-        (,,,uint256 minPSM, uint256 minWeth) =
+        (,,, uint256 minPSM, uint256 minWeth) =
             abi.decode(_swap.actionData, (address, SwapDescription, bytes, uint256, uint256));
 
         /// @dev this contract shouldn't hold any token, so we pass all tokens.
@@ -385,13 +383,21 @@ contract Adapter is ReentrancyGuard {
 
         /// @dev using block.timestamp as deadline is safe here as we checked the offchain one on parent function
         _RAMSES_ROUTER.addLiquidity(
-            PSM_TOKEN_ADDRESS, WETH_ADDRESS, false, psm_balance, weth_balance, minPSM, minWeth, _swap.recevier, block.timestamp
+            PSM_TOKEN_ADDRESS,
+            WETH_ADDRESS,
+            false,
+            psm_balance,
+            weth_balance,
+            minPSM,
+            minWeth,
+            _swap.recevier,
+            block.timestamp
         );
 
         psm_balance = _PSM_TOKEN.balanceOf(address(this));
         weth_balance = _WETH_TOKEN.balanceOf(address(this));
-        if (psm_balance > 0) _safeTransfer(PSM_TOKEN_ADDRESS, msg.sender, psm_balance);
-        if (weth_balance > 0) _safeTransfer(WETH_ADDRESS, msg.sender, weth_balance);
+        if (psm_balance > 0) _PSM_TOKEN.safeTransfer(msg.sender, psm_balance);
+        if (weth_balance > 0) _WETH_TOKEN.safeTransfer(msg.sender, weth_balance);
     }
     /// @notice Sell portalEnergy into contract to receive PSM
     /// @dev This function allows users to sell their portalEnergy to the contract to receive PSM tokens
@@ -440,7 +446,7 @@ contract Adapter is ReentrancyGuard {
         SwapData memory swap = SwapData(_receiver, amountReceived, _actionData);
         /// @dev If wanted token is PSM, transfer it
         if (_mode == 0) {
-            _safeTransfer(PSM_TOKEN_ADDRESS, _receiver, amountReceived);
+            _PSM_TOKEN.safeTransfer(_receiver, amountReceived);
         } else if (_mode == 1) {
             /// @dev If wanted adding liquidity
             addingLiquidity(swap);
@@ -492,7 +498,7 @@ contract Adapter is ReentrancyGuard {
         }
     }
 
-    function addLiquidity(
+    function addLiquidityWETH(
         address _receiver,
         uint256 _amountPSMDesired,
         uint256 _amountWETHDesired,
@@ -505,8 +511,8 @@ contract Adapter is ReentrancyGuard {
 
         (amountPSM, amountWETH) = _addLiquidity(_amountPSMDesired, _amountWETHDesired, _amountPSMMin, _amountWETHMin);
         address pair = _RAMSES_FACTORY.getPair(PSM_TOKEN_ADDRESS, WETH_ADDRESS, false);
-        _safeTransferFrom(PSM_TOKEN_ADDRESS, msg.sender, pair, amountPSM);
-        _safeTransferFrom(WETH_ADDRESS, msg.sender, pair, amountWETH);
+        _PSM_TOKEN.safeTransferFrom(msg.sender, pair, amountPSM);
+        _WETH_TOKEN.safeTransferFrom(msg.sender, pair, amountWETH);
         liquidity = IRamsesPair(pair).mint(_receiver);
     }
 
@@ -529,16 +535,17 @@ contract Adapter is ReentrancyGuard {
         (amountPSM, amountETH) = _addLiquidity(_amountPSMDesired, msg.value, _amountPSMMin, _amountETHMin);
         address pair = _RAMSES_FACTORY.getPair(PSM_TOKEN_ADDRESS, WETH_ADDRESS, false);
         _IWETH.deposit{value: amountETH}();
-        _safeTransferFrom(PSM_TOKEN_ADDRESS, msg.sender, pair, amountPSM);
-        _safeTransfer(WETH_ADDRESS, pair, amountETH);
+        _PSM_TOKEN.safeTransferFrom(msg.sender, pair, amountPSM);
+        _WETH_TOKEN.safeTransfer(pair, amountETH);
         liquidity = IRamsesPair(pair).mint(_receiver);
         // refund dust eth, if any
         if (msg.value > amountETH) {
-            _safeTransferETH(msg.sender, msg.value - amountETH);
+            (bool success,) = msg.sender.call{value: msg.value - amountETH}(new bytes(0));
+            if (!success) revert ErrorsLib.ETHTransferFailed();
         }
     }
 
-    function removeLiquidity(
+    function removeLiquidityWETH(
         address _receiver,
         uint256 _liquidity,
         uint256 _amountPSMMin,
@@ -549,7 +556,7 @@ contract Adapter is ReentrancyGuard {
         if (_receiver == address(0)) revert ErrorsLib.InvalidInput();
 
         address pair = _RAMSES_FACTORY.getPair(PSM_TOKEN_ADDRESS, WETH_ADDRESS, false);
-        _safeTransferFrom(pair, msg.sender, pair, _liquidity); // send liquidity to pair
+        IERC20(pair).safeTransferFrom(msg.sender, pair, _liquidity); // send liquidity to pair
         (amountPSM, amountWETH) = IRamsesPair(pair).burn(_receiver);
         if (_amountPSMMin >= amountPSM) revert ErrorsLib.InvalidOutput();
         if (_amountWETHMin >= amountWETH) revert ErrorsLib.InvalidOutput();
@@ -562,10 +569,11 @@ contract Adapter is ReentrancyGuard {
         uint256 _amountETHMin,
         uint256 _deadline
     ) external returns (uint256 amountPSM, uint256 amountETH) {
-        (amountPSM, amountETH) = removeLiquidity(address(this), _liquidity, _amountPSMMin, _amountETHMin, _deadline);
+        (amountPSM, amountETH) = removeLiquidityWETH(address(this), _liquidity, _amountPSMMin, _amountETHMin, _deadline);
         _IWETH.withdraw(amountETH);
-        _safeTransfer(PSM_TOKEN_ADDRESS, _receiver, amountPSM);
-        _safeTransferETH(_receiver, amountETH);
+        _PSM_TOKEN.safeTransfer(_receiver, amountPSM);
+        (bool success,) = _receiver.call{value: amountETH}(new bytes(0));
+        if (!success) revert ErrorsLib.ETHTransferFailed();
     }
 
     // ============================================
@@ -631,25 +639,6 @@ contract Adapter is ReentrancyGuard {
 
     function quoteRemoveLiquidity(uint256 _liquidity) external view returns (uint256 amountA, uint256 amountB) {
         return _RAMSES_ROUTER.quoteRemoveLiquidity(PSM_TOKEN_ADDRESS, WETH_ADDRESS, false, _liquidity);
-    }
-
-    // HELPER FUNCTIONS
-    function _safeTransferETH(address to, uint256 value) internal {
-        (bool success,) = to.call{value: value}(new bytes(0));
-        require(success, "TransferHelper: ETH_TRANSFER_FAILED");
-    }
-
-    function _safeTransfer(address token, address to, uint256 value) internal {
-        require(token.code.length > 0);
-        (bool success, bytes memory data) = token.call(abi.encodeWithSelector(IERC20.transfer.selector, to, value));
-        require(success && (data.length == 0 || abi.decode(data, (bool))));
-    }
-
-    function _safeTransferFrom(address token, address from, address to, uint256 value) internal {
-        require(token.code.length > 0);
-        (bool success, bytes memory data) =
-            token.call(abi.encodeWithSelector(IERC20.transferFrom.selector, from, to, value));
-        require(success && (data.length == 0 || abi.decode(data, (bool))));
     }
 
     receive() external payable {

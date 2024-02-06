@@ -799,7 +799,7 @@ contract AdapterTest is Test {
         vm.startPrank(karen);
         _PSM_TOKEN.approve(adapterAddress, type(uint256).max);
         _WETH_TOKEN.approve(adapterAddress, type(uint256).max);
-        adapter.addLiquidity(karen, amountADesired, amountBDesired, amountAMin, amountBMin, block.timestamp + 200);
+        adapter.addLiquidityWETH(karen, amountADesired, amountBDesired, amountAMin, amountBMin, block.timestamp + 200);
         vm.stopPrank();
     }
 
@@ -844,7 +844,7 @@ contract AdapterTest is Test {
         uint256 balance1before = _WETH_TOKEN.balanceOf(karen);
         vm.startPrank(karen);
         IERC20(pair).approve(adapterAddress, type(uint256).max);
-        adapter.removeLiquidity(karen, 6223938189866138537600, 0, 0, block.timestamp + 200);
+        adapter.removeLiquidityWETH(karen, 6223938189866138537600, 0, 0, block.timestamp + 200);
         assertEq(IERC20(pair).balanceOf(karen), 0);
         assertEq(balance0before + amountA, _PSM_TOKEN.balanceOf(karen));
         assertEq(balance1before + amountB, _WETH_TOKEN.balanceOf(karen));
