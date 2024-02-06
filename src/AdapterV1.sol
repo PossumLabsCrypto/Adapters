@@ -378,19 +378,19 @@ contract Adapter is ReentrancyGuard {
             abi.decode(_swap.actionData, (address, SwapDescription, bytes, uint256, uint256));
 
         /// @dev this contract shouldn't hold any token, so we pass all tokens.
-        uint256 psm_balance = _PSM_TOKEN.balanceOf(address(this));
-        uint256 weth_balance = _WETH_TOKEN.balanceOf(address(this));
+        uint256 PSMBalance = _PSM_TOKEN.balanceOf(address(this));
+        uint256 WETHBalance = _WETH_TOKEN.balanceOf(address(this));
 
-        (uint256 amountPSM, uint256 amountWETH) = _addLiquidity(psm_balance, weth_balance, minPSM, minWeth);
+        (uint256 amountPSM, uint256 amountWETH) = _addLiquidity(PSMBalance, WETHBalance, minPSM, minWeth);
         address pair = _RAMSES_FACTORY.getPair(PSM_TOKEN_ADDRESS, WETH_ADDRESS, false);
         _PSM_TOKEN.safeTransfer(pair, amountPSM);
         _WETH_TOKEN.safeTransfer(pair, amountWETH);
         IRamsesPair(pair).mint(_swap.recevier);
 
-        uint256 remain_PSM = psm_balance - amountPSM;
-        uint256 remain_WETH = weth_balance - amountWETH;
-        if (remain_PSM > 0) _PSM_TOKEN.safeTransfer(msg.sender, psm_balance);
-        if (remain_WETH > 0) _WETH_TOKEN.safeTransfer(msg.sender, weth_balance);
+        uint256 remainPSM = PSMBalance - amountPSM;
+        uint256 remainWETH = WETHBalance - amountWETH;
+        if (remainPSM > 0) _PSM_TOKEN.safeTransfer(msg.sender, PSMBalance);
+        if (remainWETH > 0) _WETH_TOKEN.safeTransfer(msg.sender, WETHBalance);
     }
     /// @notice Sell portalEnergy into contract to receive PSM
     /// @dev This function allows users to sell their portalEnergy to the contract to receive PSM tokens
