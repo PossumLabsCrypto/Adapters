@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.19;
 
 interface IHlpPortal {
@@ -42,7 +42,10 @@ interface IHlpPortal {
         address _address
     ) external view returns (uint256 lastTradeTime);
 
-    function getUpdateAccount(address _user, uint256 _amount)
+    function getUpdateAccount(
+        address _user,
+        uint256 _amount
+    )
         external
         view
         returns (address, uint256, uint256, uint256, uint256, uint256, uint256);

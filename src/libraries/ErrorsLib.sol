@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.19;
 
 // ============================================
@@ -6,15 +6,25 @@ pragma solidity =0.8.19;
 // ============================================
 library ErrorsLib {
     error DeadlineExpired();
-    error AccountDoesNotExist();
-    error InsufficientToWithdraw();
-    error InsufficientPEtokens();
+    error DurationLocked();
+    error DurationTooLow();
+    error EmptyAccount();
     error InsufficientBalance();
-    error InvalidOutput();
-    error InvalidInput();
-    error TradeTimelockActive();
-    error JustWeth();
-    error InsufficientBamount();
-    error InsufficientAamount();
-    error ETHTransferFailed();
+    error InsufficientReceived();
+    error InsufficientStakeBalance();
+    error InsufficientToWithdraw();
+    error InvalidAddress();
+    error InvalidAmount();
+    error InvalidConstructor();
+    error NativeTokenNotAllowed();
+    error TokenExists();
+    error FailedToSendNativeToken();
+
+    error InvalidMode();
+    error InsufficientReserves();
+    error notOwner();
+    error isMigrating();
+    error notMigrating();
+    error migrationVotePending();
+    error notCalledByDestination();
 }

@@ -1,6 +1,5 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.19;
-
 
 struct SwapDescription {
     address srcToken;
@@ -13,7 +12,7 @@ struct SwapDescription {
 }
 
 interface IOneInchV5AggregationRouter {
-    /// @notice Performs a swap, delegating all calls encoded in `data` to `_executor`. 
+    /// @notice Performs a swap, delegating all calls encoded in `data` to `_executor`.
     /// @dev router keeps 1 wei of every token on the contract balance for gas optimisations reasons. This affects first swap of every token by leaving 1 wei on the contract.
     /// @param _executor Aggregation _executor that executes calls described in `data`
     /// @param _desc Swap description
