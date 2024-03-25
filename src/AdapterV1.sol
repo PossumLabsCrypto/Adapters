@@ -30,9 +30,9 @@ contract AdapterV1 is ReentrancyGuard {
     IERC20 constant WETH = IERC20(WETH_ADDRESS); // the ERC20 representation of WETH token
     address public constant OWNER = 0xAb845D09933f52af5642FC87Dd8FBbf553fd7B33;
 
-    IMintBurnToken public portalEnergyToken; // the ERC20 representation of portalEnergy
-    IERC20 public principalToken;
-    uint256 internal decimalsAdjustment;
+    IMintBurnToken public portalEnergyToken; // The ERC20 representation of portalEnergy
+    IERC20 public principalToken; // The staking token of the Portal
+    uint256 denominator;
 
     IRamsesFactory public constant RAMSES_FACTORY =
         IRamsesFactory(RAMSES_FACTORY_ADDRESS); // Interface of Ramses Factory
@@ -81,6 +81,7 @@ contract AdapterV1 is ReentrancyGuard {
     // ==          MIGRATION MANAGEMENT          ==
     // ============================================
     /// @dev Allow the contract owner to propose a new Adapter contract for migration
+    /// @dev The current value of migrationDestination must be the zero address
     function proposeMigrationDestination(
         address _adapter
     ) external onlyOwner notMigrating {
@@ -89,14 +90,13 @@ contract AdapterV1 is ReentrancyGuard {
 
     /// @dev Allow users to accept the proposed contract to migrate
     /// @dev Can only be called if a destination was proposed, i.e. migration is ongoing
-    /// @dev Users can only vote once
     function acceptMigrationDestination() external isMigrating {
         /// @dev Get user stake balance which equals voting power
         Account memory account = accounts[msg.sender];
 
-        /// @dev Ensure that users can only vote once
+        /// @dev Ensure that users can only add their current stake balance to votes
         if (voted[msg.sender] == 0) {
-            /// @dev Increase the total number of acceptance votes by user stake balance
+            /// @dev Increase the total number of acceptance votes and votes of the user by user stake balance
             votesForMigration += account.stakedBalance;
             voted[msg.sender] = account.stakedBalance;
         }
@@ -140,6 +140,7 @@ contract AdapterV1 is ReentrancyGuard {
             stakedBalance,
             maxStakeDebt,
             portalEnergy,
+            ,
 
         ) = getUpdateAccount(_user, 0, true);
 
@@ -151,9 +152,9 @@ contract AdapterV1 is ReentrancyGuard {
     // ==           STAKING & UNSTAKING          ==
     // ============================================
     /// @notice Simulate updating a user stake position and return the values without updating the struct
-    /// @dev Returns the simulated up-to-date user stake information
-    /// @dev Considers changes from staking or unstaking
-    /// @dev Throws when trying to unstake more than balance or with insufficient Portal Energy
+    /// @dev Return the simulated up-to-date user stake information
+    /// @dev Consider changes from staking or unstaking including burning amount of PE tokens
+    /// @dev Attempt to burn Portal Energy Tokens if user unstakes more than available to withdraw
     /// @param _user The user whose stake position is to be updated
     /// @param _amount The amount to add or subtract from the user's stake position
     /// @param _isPositiveAmount True for staking (add), false for unstaking (subtract)
@@ -170,7 +171,8 @@ contract AdapterV1 is ReentrancyGuard {
             uint256 stakedBalance,
             uint256 maxStakeDebt,
             uint256 portalEnergy,
-            uint256 availableToWithdraw
+            uint256 availableToWithdraw,
+            uint256 portalEnergyTokensRequired
         )
     {
         /// @dev Get maxLockDuration from portal
@@ -180,73 +182,68 @@ contract AdapterV1 is ReentrancyGuard {
         Account memory account = accounts[_user];
 
         /// @dev initialize helper variables
-        uint256 amount = _amount;
-        bool isPositiveAmount = _isPositiveAmount;
-        uint256 portalEnergyEarned;
-        uint256 portalEnergyIncrease;
+        uint256 amount = _amount; // to avoid stack too deep issue
+        bool isPositive = _isPositiveAmount; // to avoid stack too deep issue
         uint256 portalEnergyNetChange;
-        uint256 portalEnergyAdjustment;
+        uint256 timePassed = block.timestamp - account.lastUpdateTime;
+        uint256 maxLockDifference = maxLockDuration -
+            account.lastMaxLockDuration;
+        uint256 adjustedPE = amount * maxLockDuration * 1e18;
+        stakedBalance = account.stakedBalance;
+
+        /// @dev Check that the Stake Balance is sufficient for unstaking the amount
+        if (!isPositive && amount > stakedBalance) {
+            revert ErrorsLib.InsufficientStakeBalance();
+        }
 
         /// @dev Check the user account state based on lastUpdateTime
         /// @dev If this variable is 0, the user never staked and could not earn PE
-        if (account.lastUpdateTime != 0) {
+        if (account.lastUpdateTime > 0) {
             /// @dev Calculate the Portal Energy earned since the last update
-            portalEnergyEarned = (account.stakedBalance *
-                (block.timestamp - account.lastUpdateTime) *
-                1e18);
+            uint256 portalEnergyEarned = stakedBalance * timePassed;
 
             /// @dev Calculate the gain of Portal Energy from maxLockDuration increase
-            portalEnergyIncrease = (account.stakedBalance *
-                (maxLockDuration - account.lastMaxLockDuration) *
-                1e18);
+            uint256 portalEnergyIncrease = stakedBalance * maxLockDifference;
 
             /// @dev Summarize Portal Energy changes and divide by common denominator
             portalEnergyNetChange =
-                (portalEnergyEarned + portalEnergyIncrease) /
-                (SECONDS_PER_YEAR * decimalsAdjustment);
+                ((portalEnergyEarned + portalEnergyIncrease) * 1e18) /
+                denominator;
         }
 
         /// @dev Calculate the adjustment of Portal Energy from balance change
-        portalEnergyAdjustment =
-            ((amount * maxLockDuration) * 1e18) /
-            (SECONDS_PER_YEAR * decimalsAdjustment);
+        uint256 portalEnergyAdjustment = adjustedPE / denominator;
 
-        /// @dev Check that user has enough Portal Energy for unstaking
-        if (
-            !isPositiveAmount &&
+        /// @dev Calculate the amount of Portal Energy Tokens to be burned for unstaking the amount
+        portalEnergyTokensRequired = !isPositive &&
             portalEnergyAdjustment >
             (account.portalEnergy + portalEnergyNetChange)
-        ) {
-            revert ErrorsLib.InsufficientToWithdraw();
-        }
-
-        /// @dev Check that the Stake Balance is sufficient for unstaking
-        if (!isPositiveAmount && amount > account.stakedBalance) {
-            revert ErrorsLib.InsufficientStakeBalance();
-        }
+            ? portalEnergyAdjustment -
+                (account.portalEnergy + portalEnergyNetChange)
+            : 0;
 
         /// @dev Set the last update time to the current timestamp
         lastUpdateTime = block.timestamp;
 
-        /// @dev Get the updated last maxLockDuration
+        /// @dev Update the last maxLockDuration
         lastMaxLockDuration = maxLockDuration;
 
-        /// @dev Calculate the user's staked balance and consider stake or unstake
-        stakedBalance = isPositiveAmount
-            ? account.stakedBalance + amount
-            : account.stakedBalance - amount;
+        /// @dev Update the user's staked balance and consider stake or unstake
+        stakedBalance = isPositive
+            ? stakedBalance + amount
+            : stakedBalance - amount;
 
         /// @dev Update the user's max stake debt
-        maxStakeDebt =
-            (stakedBalance * maxLockDuration * 1e18) /
-            (SECONDS_PER_YEAR * decimalsAdjustment);
+        maxStakeDebt = (stakedBalance * maxLockDuration * 1e18) / denominator;
 
         /// @dev Update the user's portalEnergy and account for stake or unstake
-        portalEnergy = isPositiveAmount
+        /// @dev This will be 0 if Portal Energy Tokens must be burned
+        portalEnergy = isPositive
             ? account.portalEnergy +
                 portalEnergyNetChange +
                 portalEnergyAdjustment
             : account.portalEnergy +
+                portalEnergyTokensRequired +
                 portalEnergyNetChange -
                 portalEnergyAdjustment;
 
@@ -309,6 +306,7 @@ contract AdapterV1 is ReentrancyGuard {
             uint256 stakedBalance,
             uint256 maxStakeDebt,
             uint256 portalEnergy,
+            ,
 
         ) = getUpdateAccount(msg.sender, _amount, true);
 
@@ -330,11 +328,12 @@ contract AdapterV1 is ReentrancyGuard {
         emit EventsLib.PrincipalStaked(msg.sender, _amount);
     }
 
-    /// @notice Serve unstaking requests & withdraw principal from Portal
+    /// @notice Serve unstaking requests & withdraw principal from yield source
     /// @dev This function allows users to unstake their tokens
     /// @dev Update the user account
     /// @dev Update the global tracker of staked principal
-    /// @dev Withdraw the amount of principal from the connected Portal
+    /// @dev Burn Portal Energy Tokens from caller to top up account balance if required
+    /// @dev Withdraw the matching amount of principal from the yield source (external protocol)
     /// @dev Send the principal tokens to the user
     /// @param _amount The amount of tokens to unstake
     function unstake(uint256 _amount) external nonReentrant {
@@ -346,15 +345,17 @@ contract AdapterV1 is ReentrancyGuard {
             votesForMigration -= accounts[msg.sender].stakedBalance;
         }
 
-        /// @dev Get the current state of the user stake in Adapter
-        /// @dev Throws if caller tries to unstake more than stake balance or with insufficient PE
+        /// @dev Get the current state of the user stake
+        /// @dev Throws if caller tries to unstake more than stake balance
+        /// @dev Will burn Portal Energy tokens if account has insufficient Portal Energy
         (
             ,
             ,
             uint256 stakedBalance,
             uint256 maxStakeDebt,
             uint256 portalEnergy,
-
+            ,
+            uint256 portalEnergyTokensRequired
         ) = getUpdateAccount(msg.sender, _amount, false);
 
         /// @dev Update the user stake struct
@@ -362,6 +363,21 @@ contract AdapterV1 is ReentrancyGuard {
 
         /// @dev Update the global tracker of staked principal
         totalPrincipalStaked -= _amount;
+
+        /// @dev Take Portal Energy Tokens from the user if required
+        if (portalEnergyTokensRequired > 0) {
+            portalEnergyToken.transferFrom(
+                msg.sender,
+                address(this),
+                portalEnergyTokensRequired
+            );
+
+            /// @dev Burn the Portal Energy Tokens to top up PE balance of the Adapter
+            PORTAL.burnPortalEnergyToken(
+                address(this),
+                portalEnergyTokensRequired
+            );
+        }
 
         /// @dev Withdraw principal from the Portal to the Adapter
         PORTAL.unstake(_amount);
@@ -445,6 +461,7 @@ contract AdapterV1 is ReentrancyGuard {
             uint256 stakedBalance,
             uint256 maxStakeDebt,
             uint256 portalEnergy,
+            ,
 
         ) = getUpdateAccount(msg.sender, 0, true);
 
@@ -620,18 +637,21 @@ contract AdapterV1 is ReentrancyGuard {
     // ============================================
     // ==                GENERAL                 ==
     // ============================================
-    /// @dev Increase token spending allowances of Adapter by the Portal
-    function increaseAllowances() public {
+    /// @dev Increase token spending allowances of Adapter holdings
+    function increaseAllowances() external {
         PSM.approve(address(PORTAL), MAX_UINT);
         PSM.approve(ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT_ADDRESS, MAX_UINT);
         portalEnergyToken.approve(address(PORTAL), MAX_UINT);
+        /// @dev For ERC20 that require allowance to be 0 before increasing (e.g. USDT) add the following:
+        /// principalToken.approve(address(PORTAL), 0);
         principalToken.safeIncreaseAllowance(address(PORTAL), MAX_UINT);
     }
 
+    /// @dev Initialize important variables, called by the constructor
     function setUp() internal {
-        principalToken = IERC20(address(PORTAL.PRINCIPAL_TOKEN_ADDRESS())); // set the principal token of the Portal
+        principalToken = IERC20(address(PORTAL.PRINCIPAL_TOKEN_ADDRESS()));
         portalEnergyToken = IMintBurnToken(address(PORTAL.portalEnergyToken()));
-        decimalsAdjustment = PORTAL.DECIMALS_ADJUSTMENT();
+        denominator = SECONDS_PER_YEAR * PORTAL.DECIMALS_ADJUSTMENT();
     }
 
     receive() external payable {}
