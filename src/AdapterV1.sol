@@ -637,6 +637,56 @@ contract AdapterV1 is ReentrancyGuard {
     // ============================================
     // ==                GENERAL                 ==
     // ============================================
+    /// @notice Users can burn their PortalEnergyTokens to increase their portalEnergy in the Adapter
+    /// @dev This function allows users to convert Portal Energy Tokens into internal Adapter PE
+    /// @dev Burn Portal Energy Tokens of caller and increase portalEnergy in Adapter
+    /// @param _amount The amount of portalEnergyToken to burn
+    function burnPortalEnergyToken(uint256 _amount) external notMigrating {
+        /// @dev Rely on input validation of the Portal
+
+        /// @dev Increase the portalEnergy of the recipient by the amount of portalEnergyToken burned
+        accounts[msg.sender].portalEnergy += _amount;
+
+        /// @dev Transfer Portal Energy Tokens to Adapter so that they can be burned
+        portalEnergyToken.transferFrom(msg.sender, address(this), _amount);
+
+        /// @dev Burn portalEnergyToken from the Adapter
+        PORTAL.burnPortalEnergyToken(address(this), _amount);
+    }
+
+    /// @notice Users can mint Portal Energy Tokens using their internal balance
+    /// @dev This function controls the minting of Portal Energy Token
+    /// @dev Decrease portalEnergy of caller and instruct Portal to mint Portal Energy Tokens to the caller
+    /// @param _amount The amount of portalEnergyToken to mint
+    function mintPortalEnergyToken(uint256 _amount) external {
+        /// @dev Rely on input validation of the Portal
+
+        /// @dev Get the current state of the user stake
+        (
+            ,
+            ,
+            uint256 stakedBalance,
+            uint256 maxStakeDebt,
+            uint256 portalEnergy,
+            ,
+
+        ) = getUpdateAccount(msg.sender, 0, true);
+
+        /// @dev Check that the caller has sufficient portalEnergy to mint the amount of portalEnergyToken
+        if (portalEnergy < _amount) {
+            revert ErrorsLib.InsufficientBalance();
+        }
+
+        /// @dev Reduce the portalEnergy of the caller by the amount of minted tokens
+        portalEnergy -= _amount;
+
+        /// @dev Update the user stake struct
+        _updateAccount(msg.sender, stakedBalance, maxStakeDebt, portalEnergy);
+
+        /// @dev Mint portal energy tokens to the recipient's wallet
+        PORTAL.mintPortalEnergyToken(msg.sender, _amount);
+    }
+
     /// @dev Increase token spending allowances of Adapter holdings
     function increaseAllowances() external {
         PSM.approve(address(PORTAL), MAX_UINT);
