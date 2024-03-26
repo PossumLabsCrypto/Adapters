@@ -278,7 +278,7 @@ contract AdapterV1 is ReentrancyGuard {
         account.portalEnergy = _portalEnergy;
 
         /// @dev Emit an event with the updated stake information
-        emit EventsLib.StakePositionUpdated(
+        emit EventsLib.AdapterPositionUpdated(
             _user,
             account.lastUpdateTime,
             account.lastMaxLockDuration,
@@ -325,7 +325,7 @@ contract AdapterV1 is ReentrancyGuard {
         }
 
         /// @dev Emit event that principal has been staked
-        emit EventsLib.PrincipalStaked(msg.sender, _amount);
+        emit EventsLib.AdapterStaked(msg.sender, _amount);
     }
 
     /// @notice Serve unstaking requests & withdraw principal from yield source
@@ -392,7 +392,7 @@ contract AdapterV1 is ReentrancyGuard {
             IERC20(principalToken).safeTransfer(msg.sender, _amount);
         }
 
-        emit EventsLib.PrincipalUnstaked(msg.sender, _amount);
+        emit EventsLib.AdapterUnstaked(msg.sender, _amount);
     }
 
     // ============================================
@@ -430,6 +430,12 @@ contract AdapterV1 is ReentrancyGuard {
             _minReceived,
             _deadline
         );
+
+        emit EventsLib.AdapterEnergyBuyExecuted(
+            msg.sender,
+            msg.sender,
+            amountReceived
+        );
     }
 
     /// @notice Users sell portalEnergy into the Adapter to receive PSM to a recipient address
@@ -437,7 +443,7 @@ contract AdapterV1 is ReentrancyGuard {
     /// @dev Get the output amount from the quote function
     /// @dev Reduce the portalEnergy balance of the caller by the amount of portalEnergy sold
     /// @dev Send PSM to the recipient
-    /// @param _recipient The recipient of the PSM tokens
+    /// @param _recipient The recipient of the output tokens
     /// @param _amountInputPE The amount of Portal Energy to sell (Adapter)
     /// @param _minReceived The minimum amount of PSM to receive
     /// @param _deadline The unix timestamp that marks the deadline for order execution
@@ -502,6 +508,12 @@ contract AdapterV1 is ReentrancyGuard {
         } else {
             swapOneInch(swap, false);
         }
+
+        emit EventsLib.AdapterEnergySellExecuted(
+            msg.sender,
+            _recipient,
+            _amountInputPE
+        );
     }
 
     // ============================================
@@ -652,6 +664,8 @@ contract AdapterV1 is ReentrancyGuard {
 
         /// @dev Burn portalEnergyToken from the Adapter
         PORTAL.burnPortalEnergyToken(address(this), _amount);
+
+        emit EventsLib.AdapterEnergyBurned(msg.sender, _amount);
     }
 
     /// @notice Users can mint Portal Energy Tokens using their internal balance
@@ -683,8 +697,10 @@ contract AdapterV1 is ReentrancyGuard {
         /// @dev Update the user stake struct
         _updateAccount(msg.sender, stakedBalance, maxStakeDebt, portalEnergy);
 
-        /// @dev Mint portal energy tokens to the recipient's wallet
+        /// @dev Mint portal energy tokens to the caller wallet
         PORTAL.mintPortalEnergyToken(msg.sender, _amount);
+
+        emit EventsLib.AdapterEnergyMinted(msg.sender, _amount);
     }
 
     /// @dev Increase token spending allowances of Adapter holdings

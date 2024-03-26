@@ -2,34 +2,22 @@
 pragma solidity =0.8.19;
 
 library EventsLib {
-    event PortalEnergyBuyExecuted(
+    event AdapterEnergyBuyExecuted(
         address indexed caller,
         address indexed recipient,
         uint256 amount
     );
-    event PortalEnergySellExecuted(
+    event AdapterEnergySellExecuted(
         address indexed caller,
         address indexed recipient,
         uint256 amount
-    );
-
-    event AdapterNFTminted(
-        address indexed caller,
-        address indexed recipient,
-        uint256 nftID
-    );
-
-    event AdapterNFTredeemed(
-        address indexed caller,
-        address indexed recipient,
-        uint256 nftID
     );
 
     // --- Events related to staking & unstaking ---
-    event PrincipalStaked(address indexed user, uint256 amountStaked);
-    event PrincipalUnstaked(address indexed user, uint256 amountUnstaked);
+    event AdapterStaked(address indexed user, uint256 amountStaked);
+    event AdapterUnstaked(address indexed user, uint256 amountUnstaked);
 
-    event StakePositionUpdated(
+    event AdapterPositionUpdated(
         address indexed user,
         uint256 lastUpdateTime,
         uint256 lastMaxLockDuration,
@@ -37,4 +25,10 @@ library EventsLib {
         uint256 maxStakeDebt,
         uint256 portalEnergy
     );
+
+    // --- Events related to minting and burning PE ---
+
+    event AdapterEnergyBurned(address indexed user, uint256 amount);
+
+    event AdapterEnergyMinted(address indexed user, uint256 amount);
 }
