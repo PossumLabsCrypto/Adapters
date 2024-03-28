@@ -61,6 +61,8 @@ interface IPortalV2MultiAsset {
 
     function maxLockDuration() external view returns (uint256 maxLockDuration);
 
+    function updateMaxLockDuration() external;
+
     function portalEnergyToken()
         external
         view

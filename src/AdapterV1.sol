@@ -14,6 +14,22 @@ import {IOneInchV5AggregationRouter, SwapDescription} from "./interfaces/IOneInc
 import {IRamsesFactory, IRamsesRouter, IRamsesPair} from "./interfaces/IRamses.sol";
 import "./libraries/ConstantsLib.sol";
 
+/// @title Adapter V1 contract
+/// @author Possum Labs
+/** @notice This contract accepts and returns user deposits of a single asset
+ * The deposits are redirected to the underlying Portal
+ * Yield is claimed and collected with this contract
+ * Users accrue portalEnergy points over time while staking their tokens
+ * portalEnergy can be exchanged against the PSM token using the internal Liquidity Pool or minted as ERC20
+ * PortalEnergy Tokens can be burned to increase a recipient internal portalEnergy balance
+ * Users can buy more portalEnergy via the internal LP by spending PSM
+ * The contract can receive PSM tokens during the funding phase and issues bTokens as receipt
+ * bTokens received during the funding phase are used to initialize the internal LP
+ * bTokens can be redeemed against the fundingRewardPool which consists of PSM tokens
+ * The fundingRewardPool is filled over time by taking a 10% cut from the Converter
+ * The Converter is an arbitrage mechanism that allows anyone to sweep the contract balance of a token
+ * When triggering the Converter, the caller (arbitrager) must send a fixed amount of PSM tokens to the contract
+ */
 contract AdapterV1 is ReentrancyGuard {
     constructor(address _PORTAL_ADDRESS) {
         PORTAL = IPortalV2MultiAsset(_PORTAL_ADDRESS);
@@ -457,8 +473,16 @@ contract AdapterV1 is ReentrancyGuard {
         uint256 _mode,
         bytes calldata _actionData
     ) external notMigrating {
-        /// @dev Validate additional input arguments, let rest float up from Portal
+        /// @dev Validate additional input arguments, let other checks float up from Portal
         if (_mode > 2) revert ErrorsLib.InvalidMode();
+
+        /// @dev Attempt to update the maxLock duration of the Portal. Requires 1 manual update to start
+        if (
+            PORTAL.maxLockDuration() > 7776000 &&
+            PORTAL.maxLockDuration() < 157680000
+        ) {
+            PORTAL.updateMaxLockDuration();
+        }
 
         /// @dev Get the current state of user stake in Adapter
         (
@@ -647,7 +671,7 @@ contract AdapterV1 is ReentrancyGuard {
     }
 
     // ============================================
-    // ==                GENERAL                 ==
+    // ==           PE ERC20 MANAGEMENT          ==
     // ============================================
     /// @notice Users can burn their PortalEnergyTokens to increase their portalEnergy in the Adapter
     /// @dev This function allows users to convert Portal Energy Tokens into internal Adapter PE
@@ -703,6 +727,9 @@ contract AdapterV1 is ReentrancyGuard {
         emit EventsLib.AdapterEnergyMinted(msg.sender, _amount);
     }
 
+    // ============================================
+    // ==                GENERAL                 ==
+    // ============================================
     /// @dev Increase token spending allowances of Adapter holdings
     function increaseAllowances() external {
         PSM.approve(address(PORTAL), MAX_UINT);

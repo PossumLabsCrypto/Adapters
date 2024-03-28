@@ -2,60 +2,6 @@
 pragma solidity =0.8.19;
 
 // ============================================
-// ==           PE ERC20 MANAGEMENT          ==
-// ============================================
-
-function mintPortalEnergyToken(address _recipient, uint256 _amount) external {
-    /// @dev Rely on input validation from Portal
-
-    /// @dev Get the current state of the user stake
-    (
-        address user,
-        ,
-        ,
-        uint256 stakedBalance,
-        uint256 maxStakeDebt,
-        uint256 portalEnergy,
-
-    ) = getUpdateAccount(msg.sender, 0, true);
-
-    /// @dev Check that the caller has sufficient portalEnergy to mint the amount of portalEnergyToken
-    if (portalEnergy < _amount) {
-        revert ErrorsLib.InsufficientBalance();
-    }
-
-    /// @dev Reduce the portalEnergy of the caller by the amount of minted tokens
-    portalEnergy -= _amount;
-
-    /// @dev Update the user stake struct
-    _updateAccount(user, stakedBalance, maxStakeDebt, portalEnergy);
-
-    /// @dev Mint portal energy tokens to the recipient's wallet
-    PORTAL.mintPortalEnergyToken(_recipient, _amount);
-}
-
-function burnPortalEnergyToken(address _recipient, uint256 _amount) external {
-    /// @dev Check for zero value inputs
-    if (_amount == 0) {
-        revert ErrorsLib.InvalidAmount();
-    }
-    if (_recipient == address(0)) {
-        revert ErrorsLib.InvalidAddress();
-    }
-
-    /// @dev Increase the portalEnergy of the recipient (in Adapter) by the amount of portalEnergyToken burned
-    accounts[_recipient].portalEnergy += _amount;
-
-    /// @dev Burn portalEnergyToken from the caller's wallet
-    IERC20(address(portalEnergyToken)).safeTransferFrom(
-        msg.sender,
-        address(this),
-        _amount
-    );
-    PORTAL.burnPortalEnergyToken(address(this), _amount);
-}
-
-// ============================================
 // ==         RAMSES LP MANAGEMENT           ==
 // ============================================
 
