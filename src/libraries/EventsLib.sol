@@ -28,7 +28,15 @@ library EventsLib {
 
     // --- Events related to minting and burning PE ---
 
-    event AdapterEnergyBurned(address indexed user, uint256 amount);
+    event AdapterEnergyBurned(
+        address indexed user,
+        address indexed recipient,
+        uint256 amount
+    );
 
-    event AdapterEnergyMinted(address indexed user, uint256 amount);
+    event AdapterEnergyMinted(
+        address indexed user,
+        address indexed recipient,
+        uint256 amount
+    );
 }

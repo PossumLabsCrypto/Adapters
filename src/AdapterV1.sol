@@ -17,18 +17,13 @@ import "./libraries/ConstantsLib.sol";
 /// @title Adapter V1 contract
 /// @author Possum Labs
 /** @notice This contract accepts and returns user deposits of a single asset
- * The deposits are redirected to the underlying Portal
- * Yield is claimed and collected with this contract
- * Users accrue portalEnergy points over time while staking their tokens
- * portalEnergy can be exchanged against the PSM token using the internal Liquidity Pool or minted as ERC20
- * PortalEnergy Tokens can be burned to increase a recipient internal portalEnergy balance
- * Users can buy more portalEnergy via the internal LP by spending PSM
- * The contract can receive PSM tokens during the funding phase and issues bTokens as receipt
- * bTokens received during the funding phase are used to initialize the internal LP
- * bTokens can be redeemed against the fundingRewardPool which consists of PSM tokens
- * The fundingRewardPool is filled over time by taking a 10% cut from the Converter
- * The Converter is an arbitrage mechanism that allows anyone to sweep the contract balance of a token
- * When triggering the Converter, the caller (arbitrager) must send a fixed amount of PSM tokens to the contract
+ * The deposits are redirected to a connected Portal contract
+ * Users accrue portalEnergy points over time while staking their tokens in the Adapter
+ * portalEnergy can be exchanged for PSM tokens via the virtual LP of the connected Portals
+ * When selling portalEnergy, users can choose to receive any DEX traded token by routing PSM through 1Inch
+ * Users can also opt to receive ETH/PSM V2 LP tokens on Ramses
+ * portalEnergy can be minted as standard ERC20 token
+ * PortalEnergy Tokens can be burned to increase a recipient portalEnergy balance in the Adapter
  */
 contract AdapterV1 is ReentrancyGuard {
     constructor(address _PORTAL_ADDRESS) {
@@ -48,7 +43,7 @@ contract AdapterV1 is ReentrancyGuard {
 
     IMintBurnToken public portalEnergyToken; // The ERC20 representation of portalEnergy
     IERC20 public principalToken; // The staking token of the Portal
-    uint256 denominator;
+    uint256 denominator; // Used in calculation related to earning portalEnergy
 
     IRamsesFactory public constant RAMSES_FACTORY =
         IRamsesFactory(RAMSES_FACTORY_ADDRESS); // Interface of Ramses Factory
@@ -62,16 +57,15 @@ contract AdapterV1 is ReentrancyGuard {
     uint256 public totalPrincipalStaked; // Amount of principal staked by all users of the Adapter
     mapping(address => Account) public accounts; // Associate users with their stake position
 
-    address public migrationDestination; // Contract with new Adapter version
-    uint256 public votesForMigration; // Track the votes for migrating to a new Adapter
-    bool public inMigration; // True if the Adapter entered voting state to migrate
-    bool public successMigrated; // True if the migration was executed by minting stake NFT to new Adapter
-    mapping(address user => uint256 voteCount) public voted; // Track if a user has voted for migration
+    address public migrationDestination; // The new Adapter version
+    uint256 public votesForMigration; // Track the yes-votes for migrating to a new Adapter
+    bool public inMigration; // True if the Adapter entered voting stage for migration
+    bool public successMigrated; // True if the migration was executed by minting the stake NFT to the new Adapter
+    mapping(address user => uint256 voteCount) public voted; // Track user votes for migration
 
     // ============================================
     // ==               MODIFIERS                ==
     // ============================================
-
     modifier onlyOwner() {
         if (msg.sender != OWNER) {
             revert ErrorsLib.notOwner();
@@ -96,6 +90,7 @@ contract AdapterV1 is ReentrancyGuard {
     // ============================================
     // ==          MIGRATION MANAGEMENT          ==
     // ============================================
+    /// @notice Set the destination address when migrating to a new Adapter contract
     /// @dev Allow the contract owner to propose a new Adapter contract for migration
     /// @dev The current value of migrationDestination must be the zero address
     function proposeMigrationDestination(
@@ -104,7 +99,8 @@ contract AdapterV1 is ReentrancyGuard {
         migrationDestination = _adapter;
     }
 
-    /// @dev Allow users to accept the proposed contract to migrate
+    /// @notice Capital based voting process to accept the migration contract
+    /// @dev Allow users to accept the proposed migration contract
     /// @dev Can only be called if a destination was proposed, i.e. migration is ongoing
     function acceptMigrationDestination() external isMigrating {
         /// @dev Get user stake balance which equals voting power
@@ -125,6 +121,7 @@ contract AdapterV1 is ReentrancyGuard {
         }
     }
 
+    /// @notice Function to enable the new Adapter to move over account information of users
     /// @dev This function can only be called by the migration address
     /// @dev Transfer user stake information to the new contract (new Adapter)
     function migrateStake(
@@ -170,7 +167,6 @@ contract AdapterV1 is ReentrancyGuard {
     /// @notice Simulate updating a user stake position and return the values without updating the struct
     /// @dev Return the simulated up-to-date user stake information
     /// @dev Consider changes from staking or unstaking including burning amount of PE tokens
-    /// @dev Attempt to burn Portal Energy Tokens if user unstakes more than available to withdraw
     /// @param _user The user whose stake position is to be updated
     /// @param _amount The amount to add or subtract from the user's stake position
     /// @param _isPositiveAmount True for staking (add), false for unstaking (subtract)
@@ -269,10 +265,10 @@ contract AdapterV1 is ReentrancyGuard {
             : (stakedBalance * portalEnergy) / maxStakeDebt;
     }
 
-    /// @notice Update user data to the current state
-    /// @dev This function updates the user data to the current state
+    /// @notice Update user account to the current state
+    /// @dev This function updates the user accout to the current state
     /// @dev It takes memory inputs and stores them into the user account struct
-    /// @param _user The user whose data is to be updated
+    /// @param _user The user whose account is to be updated
     /// @param _stakedBalance The current Staked Balance of the user
     /// @param _maxStakeDebt The current maximum Stake Debt of the user
     /// @param _portalEnergy The current Portal Energy of the user
@@ -285,7 +281,7 @@ contract AdapterV1 is ReentrancyGuard {
         /// @dev Get maxLockDuration from portal
         uint256 maxLockDuration = PORTAL.maxLockDuration();
 
-        /// @dev Update the user´s account data
+        /// @dev Update the user account data
         Account storage account = accounts[_user];
         account.lastUpdateTime = block.timestamp;
         account.lastMaxLockDuration = maxLockDuration;
@@ -293,7 +289,7 @@ contract AdapterV1 is ReentrancyGuard {
         account.maxStakeDebt = _maxStakeDebt;
         account.portalEnergy = _portalEnergy;
 
-        /// @dev Emit an event with the updated stake information
+        /// @dev Emit an event with the updated account information
         emit EventsLib.AdapterPositionUpdated(
             _user,
             account.lastUpdateTime,
@@ -306,8 +302,9 @@ contract AdapterV1 is ReentrancyGuard {
 
     /// @notice Stake the principal token into the Adapter and then into Portal
     /// @dev This function allows users to stake their principal tokens into the Adapter
-    /// @dev Can only be called if LP is active (indirect condition)
-    /// @dev Does not follow CEI pattern for optimisation reasons. The handled tokens are trusted.
+    /// @dev Can only be called if the virtual LP is active (indirect condition)
+    /// @dev Cannot be called after a migration destination was proposed (withdraw-only mode)
+    /// @dev Does not follow CEI pattern for optimisation reasons, handled tokens are trusted
     /// @dev Update the user account
     /// @dev Update the global tracker of staked principal
     /// @dev Stake the principal into the connected Portal
@@ -344,18 +341,19 @@ contract AdapterV1 is ReentrancyGuard {
         emit EventsLib.AdapterStaked(msg.sender, _amount);
     }
 
-    /// @notice Serve unstaking requests & withdraw principal from yield source
+    /// @notice Serve unstaking requests & withdraw principal from the connected Portal
     /// @dev This function allows users to unstake their tokens
+    /// @dev Cannot be called after migration was executed (indirect condition, Adapter has no funds in Portal)
     /// @dev Update the user account
     /// @dev Update the global tracker of staked principal
     /// @dev Burn Portal Energy Tokens from caller to top up account balance if required
-    /// @dev Withdraw the matching amount of principal from the yield source (external protocol)
+    /// @dev Withdraw principal from the connected Portal
     /// @dev Send the principal tokens to the user
     /// @param _amount The amount of tokens to unstake
     function unstake(uint256 _amount) external nonReentrant {
         /// @dev Rely on input validation from Portal
 
-        /// @dev If the staker had voted for migration, deduct the vote
+        /// @dev If the staker had voted for migration, reset the vote
         if (voted[msg.sender] > 0) {
             voted[msg.sender] = 0;
             votesForMigration -= accounts[msg.sender].stakedBalance;
@@ -408,16 +406,17 @@ contract AdapterV1 is ReentrancyGuard {
             IERC20(principalToken).safeTransfer(msg.sender, _amount);
         }
 
+        /// @dev Emit the event that funds have been unstaked
         emit EventsLib.AdapterUnstaked(msg.sender, _amount);
     }
 
     // ============================================
     // ==          TRADE PORTAL ENERGY           ==
     // ============================================
-    /// @notice Users sell PSM into the Adapter to top up portalEnergy balance (Adapter) of a recipient
+    /// @notice Users sell PSM into the Adapter to top up portalEnergy balance of a recipient in the Adapter
     /// @dev This function allows users to sell PSM tokens to the contract to increase a recipient portalEnergy
-    /// @dev Get the correct price from the quote function
-    /// @dev Increase the portalEnergy (Adapter) of the recipient by the amount of portalEnergy received
+    /// @dev Get the correct price from the quote function of the Portal
+    /// @dev Increase the portalEnergy (in Adapter) of the recipient by the amount of portalEnergy received
     /// @dev Transfer the PSM tokens from the caller to the contract, then to the Portal
     /// @param _recipient The recipient of the Portal Energy credit
     /// @param _amountInputPSM The amount of PSM tokens to sell
@@ -447,6 +446,7 @@ contract AdapterV1 is ReentrancyGuard {
             _deadline
         );
 
+        /// @dev Emit the event that Portal Energy has been purchased
         emit EventsLib.AdapterEnergyBuyExecuted(
             msg.sender,
             msg.sender,
@@ -454,11 +454,11 @@ contract AdapterV1 is ReentrancyGuard {
         );
     }
 
-    /// @notice Users sell portalEnergy into the Adapter to receive PSM to a recipient address
-    /// @dev This function allows users to sell portalEnergy to the Adapter to increase a recipient PSM
+    /// @notice Users sell portalEnergy into the Adapter to receive upfront yield
+    /// @dev This function allows users to sell portalEnergy to the Adapter with different swap modes
     /// @dev Get the output amount from the quote function
     /// @dev Reduce the portalEnergy balance of the caller by the amount of portalEnergy sold
-    /// @dev Send PSM to the recipient
+    /// @dev Perform the type of exchange according to selected mode
     /// @param _recipient The recipient of the output tokens
     /// @param _amountInputPE The amount of Portal Energy to sell (Adapter)
     /// @param _minReceived The minimum amount of PSM to receive
@@ -473,7 +473,7 @@ contract AdapterV1 is ReentrancyGuard {
         uint256 _mode,
         bytes calldata _actionData
     ) external notMigrating {
-        /// @dev Validate additional input arguments, let other checks float up from Portal
+        /// @dev Only validate additional input arguments, let other checks float up from Portal
         if (_mode > 2) revert ErrorsLib.InvalidMode();
 
         /// @dev Attempt to update the maxLock duration of the Portal. Requires 1 manual update to start
@@ -533,6 +533,7 @@ contract AdapterV1 is ReentrancyGuard {
             swapOneInch(swap, false);
         }
 
+        /// @dev Emit the event that Portal Energy has been sold
         emit EventsLib.AdapterEnergySellExecuted(
             msg.sender,
             _recipient,
@@ -543,7 +544,7 @@ contract AdapterV1 is ReentrancyGuard {
     // ============================================
     // ==         External Integrations          ==
     // ============================================
-
+    /// @dev This internal function assembles the swap via the 1Inch router from API data
     function swapOneInch(SwapData memory _swap, bool _forLiquidity) internal {
         /// @dev decode the data for getting _executor, _description, _data.
         (
@@ -574,6 +575,7 @@ contract AdapterV1 is ReentrancyGuard {
     }
 
     /// @dev Given some amount of an asset and pair reserves, returns an equivalent amount of the other asset
+    /// @dev This is used to determine how many assets must be supplied to a Pool2 LP
     function quoteLiquidity(
         uint256 amountA,
         uint256 reserveA,
@@ -582,6 +584,7 @@ contract AdapterV1 is ReentrancyGuard {
         if (amountA == 0) revert ErrorsLib.InvalidAmount();
         if (reserveA == 0 || reserveB == 0)
             revert ErrorsLib.InsufficientReserves();
+
         amountB = (amountA * reserveB) / reserveA;
     }
 
@@ -590,7 +593,7 @@ contract AdapterV1 is ReentrancyGuard {
     function addLiquidity(SwapData memory _swap) internal {
         swapOneInch(_swap, true);
 
-        /// @dev Decode the data for getting minPSM and minWETH.
+        /// @dev Decode the swap data for getting minPSM and minWETH.
         (, , , uint256 minPSM, uint256 minWeth) = abi.decode(
             _swap.actionData,
             (address, SwapDescription, bytes, uint256, uint256)
@@ -607,21 +610,23 @@ contract AdapterV1 is ReentrancyGuard {
             minPSM,
             minWeth
         );
+
+        /// @dev Get the pair address of the ETH/PSM Pool2 LP
         address pair = RAMSES_FACTORY.getPair(
             PSM_TOKEN_ADDRESS,
             WETH_ADDRESS,
             false
         );
+
+        /// @dev Transfer tokens to the LP and mint LP shares to the user
+        /// @dev Uses the low level mint function of the pair implementation
+        /// @dev Assumes that the pair already exists which is the case
         PSM.safeTransfer(pair, amountPSM);
         WETH.safeTransfer(pair, amountWETH);
         IRamsesPair(pair).mint(_swap.recevier);
-
-        uint256 remainPSM = PSMBalance - amountPSM;
-        uint256 remainWETH = WETHBalance - amountWETH;
-        if (remainPSM > 0) PSM.safeTransfer(msg.sender, PSMBalance);
-        if (remainWETH > 0) WETH.safeTransfer(msg.sender, WETHBalance);
     }
 
+    /// @dev Calculate the required token amounts of PSM and WETH to add liquidity
     function _addLiquidity(
         uint256 amountADesired,
         uint256 amountBDesired,
@@ -631,7 +636,7 @@ contract AdapterV1 is ReentrancyGuard {
         if (amountADesired < amountAMin) revert ErrorsLib.InvalidAmount();
         if (amountBDesired < amountBMin) revert ErrorsLib.InvalidAmount();
 
-        /// @dev Get the pair
+        /// @dev Get the pair address
         address pair = RAMSES_FACTORY.getPair(
             PSM_TOKEN_ADDRESS,
             WETH_ADDRESS,
@@ -677,11 +682,14 @@ contract AdapterV1 is ReentrancyGuard {
     /// @dev This function allows users to convert Portal Energy Tokens into internal Adapter PE
     /// @dev Burn Portal Energy Tokens of caller and increase portalEnergy in Adapter
     /// @param _amount The amount of portalEnergyToken to burn
-    function burnPortalEnergyToken(uint256 _amount) external notMigrating {
+    function burnPortalEnergyToken(
+        address _recipient,
+        uint256 _amount
+    ) external notMigrating {
         /// @dev Rely on input validation of the Portal
 
         /// @dev Increase the portalEnergy of the recipient by the amount of portalEnergyToken burned
-        accounts[msg.sender].portalEnergy += _amount;
+        accounts[_recipient].portalEnergy += _amount;
 
         /// @dev Transfer Portal Energy Tokens to Adapter so that they can be burned
         portalEnergyToken.transferFrom(msg.sender, address(this), _amount);
@@ -689,14 +697,17 @@ contract AdapterV1 is ReentrancyGuard {
         /// @dev Burn portalEnergyToken from the Adapter
         PORTAL.burnPortalEnergyToken(address(this), _amount);
 
-        emit EventsLib.AdapterEnergyBurned(msg.sender, _amount);
+        emit EventsLib.AdapterEnergyBurned(msg.sender, _recipient, _amount);
     }
 
     /// @notice Users can mint Portal Energy Tokens using their internal balance
     /// @dev This function controls the minting of Portal Energy Token
-    /// @dev Decrease portalEnergy of caller and instruct Portal to mint Portal Energy Tokens to the caller
+    /// @dev Decrease portalEnergy of caller and instruct Portal to mint Portal Energy Tokens to the recipient
     /// @param _amount The amount of portalEnergyToken to mint
-    function mintPortalEnergyToken(uint256 _amount) external {
+    function mintPortalEnergyToken(
+        address _recipient,
+        uint256 _amount
+    ) external {
         /// @dev Rely on input validation of the Portal
 
         /// @dev Get the current state of the user stake
@@ -721,10 +732,10 @@ contract AdapterV1 is ReentrancyGuard {
         /// @dev Update the user stake struct
         _updateAccount(msg.sender, stakedBalance, maxStakeDebt, portalEnergy);
 
-        /// @dev Mint portal energy tokens to the caller wallet
-        PORTAL.mintPortalEnergyToken(msg.sender, _amount);
+        /// @dev Mint portal energy tokens to the recipient address
+        PORTAL.mintPortalEnergyToken(_recipient, _amount);
 
-        emit EventsLib.AdapterEnergyMinted(msg.sender, _amount);
+        emit EventsLib.AdapterEnergyMinted(msg.sender, _recipient, _amount);
     }
 
     // ============================================
