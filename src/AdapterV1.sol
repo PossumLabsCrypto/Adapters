@@ -12,7 +12,6 @@ import {EventsLib} from "./libraries/EventsLib.sol";
 import {ErrorsLib} from "./libraries/ErrorsLib.sol";
 import {IOneInchV5AggregationRouter, SwapDescription} from "./interfaces/IOneInchV5AggregationRouter.sol";
 import {IRamsesFactory, IRamsesRouter, IRamsesPair} from "./interfaces/IRamses.sol";
-import "./libraries/ConstantsLib.sol";
 
 /// @title Adapter V1 contract
 /// @author Possum Labs
@@ -35,6 +34,20 @@ contract AdapterV1 is ReentrancyGuard {
     // ==               VARIABLES                ==
     // ============================================
     using SafeERC20 for IERC20;
+
+    address constant PSM_TOKEN_ADDRESS =
+        0x17A8541B82BF67e10B0874284b4Ae66858cb1fd5;
+    address constant ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT_ADDRESS =
+        0x1111111254EEB25477B68fb85Ed929f73A960582;
+    address constant WETH_ADDRESS = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
+    address constant RAMSES_FACTORY_ADDRESS =
+        0xAAA20D08e59F6561f242b08513D36266C5A29415;
+    address constant RAMSES_ROUTER_ADDRESS =
+        0xAAA87963EFeB6f7E0a2711F397663105Acb1805e;
+    uint256 constant WAD = 1e18;
+    uint256 constant SECONDS_PER_YEAR = 31536000;
+    uint256 constant MAX_UINT =
+        115792089237316195423570985008687907853269984665640564039457584007913129639935;
 
     IPortalV2MultiAsset public immutable PORTAL; // The connected Portal contract
     IERC20 public constant PSM = IERC20(PSM_TOKEN_ADDRESS); // the ERC20 representation of PSM token
@@ -746,14 +759,23 @@ contract AdapterV1 is ReentrancyGuard {
         PSM.approve(address(PORTAL), MAX_UINT);
         PSM.approve(ONE_INCH_V5_AGGREGATION_ROUTER_CONTRACT_ADDRESS, MAX_UINT);
         portalEnergyToken.approve(address(PORTAL), MAX_UINT);
-        /// @dev For ERC20 that require allowance to be 0 before increasing (e.g. USDT) add the following:
-        /// principalToken.approve(address(PORTAL), 0);
-        principalToken.safeIncreaseAllowance(address(PORTAL), MAX_UINT);
+
+        /// @dev No approval required when transacting with ETH
+        if (address(principalToken) != address(0)) {
+            /// @dev For ERC20 that require allowance to be 0 before increasing (e.g. USDT) add the following:
+            /// principalToken.approve(address(PORTAL), 0);
+            principalToken.safeIncreaseAllowance(address(PORTAL), MAX_UINT);
+        }
     }
 
     /// @dev Initialize important variables, called by the constructor
     function setUp() internal {
-        principalToken = IERC20(address(PORTAL.PRINCIPAL_TOKEN_ADDRESS()));
+        if (PORTAL.PRINCIPAL_TOKEN_ADDRESS() != address(0)) {
+            principalToken = IERC20(PORTAL.PRINCIPAL_TOKEN_ADDRESS());
+        }
+        if (address(PORTAL.portalEnergyToken()) == address(0)) {
+            revert ErrorsLib.TokenNotSet();
+        }
         portalEnergyToken = IMintBurnToken(address(PORTAL.portalEnergyToken()));
         denominator = SECONDS_PER_YEAR * PORTAL.DECIMALS_ADJUSTMENT();
     }

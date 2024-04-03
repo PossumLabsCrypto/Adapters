@@ -27,4 +27,5 @@ library ErrorsLib {
     error notMigrating();
     error migrationVotePending();
     error notCalledByDestination();
+    error TokenNotSet();
 }
