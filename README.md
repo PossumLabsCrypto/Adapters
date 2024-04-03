@@ -7,7 +7,5 @@ for better view of diagram check the following [link](https://viewer.diagrams.ne
 
 ### by using an adapter, users will have the following extra abilities:
 
-1. Actor could stake for others
-2. Actor could add and remove liquidity to PSM/WETH pair in Ramses using an Adapter
-3. Actor could sell portal energy to any token using oneInch
-4. Actor could add liquidity to PSM/WETH pair by selling portal energy, all in one transaction
+1. Actor could sell portal energy to any token using oneInch
+2. Actor could add liquidity to PSM/WETH pair by selling portal energy, all in one transaction
