@@ -13,7 +13,7 @@ import {ErrorsLib} from "./libraries/ErrorsLib.sol";
 import {IOneInchV5AggregationRouter, SwapDescription} from "./interfaces/IOneInchV5AggregationRouter.sol";
 import {IRamsesFactory, IRamsesRouter, IRamsesPair} from "./interfaces/IRamses.sol";
 
-/// @title Adapter V1 contract
+/// @title Adapter V1 contract for Portals V2
 /// @author Possum Labs
 /** @notice This contract accepts and returns user deposits of a single asset
  * The deposits are redirected to a connected Portal contract
@@ -324,6 +324,10 @@ contract AdapterV1 is ReentrancyGuard {
     /// @param _amount The amount of tokens to stake
     function stake(uint256 _amount) external payable notMigrating nonReentrant {
         /// @dev Rely on input validation from Portal
+
+        if (address(principalToken) == address(0)) {
+            _amount = msg.value;
+        }
 
         /// @dev Get the current state of the user stake in Adapter
         (

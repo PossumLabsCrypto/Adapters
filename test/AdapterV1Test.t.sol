@@ -76,8 +76,7 @@ contract AdapterV1Test is Test {
 
     function setUp() public {
         // vm.createSelectFork({
-        //     urlOrAlias: "arbitrum_infura_v4",
-        //     blockNumber: 173305634
+        //     urlOrAlias: "rpcURL"
         // });
 
         principal_USDC = _USDC_TOKEN;
@@ -151,7 +150,7 @@ contract AdapterV1Test is Test {
         // fund LP
         vm.startPrank(psmSender);
         PSM.approve(address(virtualLP), 1e55);
-        virtualLP.contributeFunding(1e24);
+        virtualLP.contributeFunding(5e26);
 
         // pass time
         uint256 activationTime = block.timestamp +
@@ -161,7 +160,7 @@ contract AdapterV1Test is Test {
         // activate LP
         virtualLP.activateLP();
 
-        // register Portals
+        // register Portals in LP
         virtualLP.registerPortal(
             address(portal_USDC),
             address(principal_USDC),
@@ -175,7 +174,7 @@ contract AdapterV1Test is Test {
         vm.stopPrank();
     }
 
-    function helper_setAllowances() internal {
+    function help_setAllowances() internal {
         // increase token spending approvals for the Vault in LP
         virtualLP.increaseAllowanceVault(address(portal_USDC));
         virtualLP.increaseAllowanceVault(address(portal_ETH));
@@ -187,14 +186,26 @@ contract AdapterV1Test is Test {
 
     function help_stake_USDC() internal {
         vm.startPrank(alice);
-        principal_USDC.approve(address(adapter_USDC), 1e18);
-        adapter_USDC.stake(1e18);
+        principal_USDC.approve(address(adapter_USDC), 1e10);
+        adapter_USDC.stake(1e10);
         vm.stopPrank();
     }
 
     function help_stake_ETH() internal {
         vm.prank(alice);
-        adapter_ETH.stake{value: 1e18}(1e18);
+        adapter_ETH.stake{value: 1e19}(1e19);
+    }
+
+    function help_mintPeTokens_ETH() internal {
+        help_stake_ETH();
+
+        adapter_ETH.mintPortalEnergyToken(msg.sender, 1e18);
+    }
+
+    function help_mintPeTokens_USDC() internal {
+        help_stake_USDC();
+
+        adapter_USDC.mintPortalEnergyToken(msg.sender, 1e9);
     }
 
     /////////////////////////////////////////////
@@ -209,7 +220,7 @@ contract AdapterV1Test is Test {
             virtualLP.WETH_WATER()
         );
 
-        helper_setAllowances();
+        help_setAllowances();
 
         vm.prank(alice);
         adapter_ETH.stake{value: amount}(amount);
@@ -221,35 +232,81 @@ contract AdapterV1Test is Test {
         );
     }
 
-    // success 2: USDC Portal
-    // function testStake_USDC() external {
-    //     uint256 amount = 1e18;
-    //     uint256 VaultBalance = principal_USDC.balanceOf(virtualLP.USDC_WATER());
+    // success 2: ETH Portal
+    function testStake_ETH_2() external {
+        uint256 amount = 1e18;
+        uint256 VaultBalance = IERC20(WETH_ADDRESS).balanceOf(
+            virtualLP.WETH_WATER()
+        );
 
-    //     help_setupVirtualLP();
-    //     helper_setAllowances();
+        help_setAllowances();
 
-    //     vm.startPrank(alice);
-    //     principal_USDC.approve(address(adapter_USDC), 1e18);
-    //     adapter_USDC.stake(1e18);
-    //     vm.stopPrank();
+        vm.prank(alice);
+        adapter_ETH.stake{value: amount}(123);
 
-    //     assertEq(principal_USDC.balanceOf(alice), startAmount - amount);
-    //     assertEq(
-    //         principal_USDC.balanceOf(virtualLP.WETH_WATER()),
-    //         VaultBalance + amount
-    //     );
-    // }
+        assertEq(alice.balance, startAmount - amount);
+        assertEq(
+            _WETH_TOKEN.balanceOf(virtualLP.WETH_WATER()),
+            VaultBalance + amount
+        );
+    }
 
-    // revert 1: not enough tokens
+    // success 3: USDC Portal
+    function testStake_USDC() external {
+        uint256 amount = 1e9;
+        uint256 VaultBalance = principal_USDC.balanceOf(virtualLP.USDC_WATER());
+
+        help_setAllowances();
+
+        vm.startPrank(alice);
+        principal_USDC.approve(address(adapter_USDC), amount);
+        adapter_USDC.stake(amount);
+        vm.stopPrank();
+
+        assertEq(
+            principal_USDC.balanceOf(alice),
+            (startAmount * usdc_precision) / WAD - amount
+        );
+        assertEq(
+            principal_USDC.balanceOf(virtualLP.USDC_WATER()),
+            VaultBalance + amount
+        );
+    }
+
+    // revert 1: not enough ETH in wallet
+    function testFailStake_ETH() external {
+        uint256 amount = 1e36;
+
+        help_setAllowances();
+
+        vm.startPrank(alice);
+        vm.expectRevert("OutOfFund");
+        adapter_ETH.stake{value: amount}(amount);
+        vm.stopPrank();
+    }
+
+    // revert 2: not enough USDC in wallet
+    function testFailStake_USDC() external {
+        uint256 amount = 1e36;
+
+        help_setAllowances();
+
+        vm.startPrank(alice);
+        principal_USDC.approve(address(adapter_USDC), amount);
+        vm.expectRevert("OutOfFund");
+        adapter_USDC.stake{value: amount}(amount);
+        vm.stopPrank();
+    }
 
     // unstake
     // success 1: enough PE with ETH Portal
     // success 2: enough PE with USDC Portal
     // success 3: burning PE tokens ETH Portal
     // success 4: burning PE tokens with USDC Portal
-    // revert 1: not enough staked balance
-    // revert 2: not enough PE / PE tokens
+    // revert 1: not enough staked balance ETH Portal
+    // revert 2: not enough staked balance USDC Portal
+    // revert 3: not enough PE / PE tokens ETH Portal
+    // revert 4: not enough PE / PE tokens USDC Portal
 
     // buyPortalEnergy
     // success
