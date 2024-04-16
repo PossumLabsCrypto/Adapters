@@ -129,6 +129,7 @@ contract AdapterV1 is ReentrancyGuard {
         /// @dev Check if the votes are in favour of migrating (>50% of capital)
         if (votesForMigration > totalPrincipalStaked / 2) {
             /// @dev Mint an NFT to the new Adapter that holds the current Adapter stake information
+            /// @dev IMPORTANT: The migration contract must be able to receive ERC721 tokens
             PORTAL.mintNFTposition(migrationDestination);
             successMigrated = true;
         }
@@ -171,7 +172,7 @@ contract AdapterV1 is ReentrancyGuard {
         ) = getUpdateAccount(_user, 0, true);
 
         /// @dev delete the account of the user in this Adapter
-        delete accounts[msg.sender];
+        delete accounts[_user];
     }
 
     // ============================================
@@ -325,6 +326,7 @@ contract AdapterV1 is ReentrancyGuard {
     function stake(uint256 _amount) external payable notMigrating nonReentrant {
         /// @dev Rely on input validation from Portal
 
+        /// @dev Avoid tricking the function when ETH is the principal token by inserting fake _amount
         if (address(principalToken) == address(0)) {
             _amount = msg.value;
         }
