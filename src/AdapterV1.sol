@@ -352,6 +352,9 @@ contract AdapterV1 is ReentrancyGuard {
         if (address(principalToken) == address(0)) {
             PORTAL.stake{value: _amount}(_amount);
         } else {
+            if (msg.value > 0) {
+                revert ErrorsLib.NativeTokenNotAllowed();
+            }
             principalToken.safeTransferFrom(msg.sender, address(this), _amount);
             PORTAL.stake(_amount);
         }
@@ -413,16 +416,25 @@ contract AdapterV1 is ReentrancyGuard {
         }
 
         /// @dev Withdraw principal from the Portal to the Adapter
-        PORTAL.unstake(_amount);
-
-        /// @dev Send tokens to the user
+        /// @dev Differentiate between ETH or ERC20 withdrawals
         if (address(principalToken) == address(0)) {
-            (bool sent, ) = payable(msg.sender).call{value: _amount}("");
+            /// @dev Unstake ETH, usually receive slightly less than _amount
+            PORTAL.unstake(_amount);
+
+            /// @dev Send native ETH received from Portal to the user (full balance)
+            (bool sent, ) = payable(msg.sender).call{
+                value: address(this).balance
+            }("");
             if (!sent) {
                 revert ErrorsLib.FailedToSendNativeToken();
             }
         } else {
-            IERC20(principalToken).safeTransfer(msg.sender, _amount);
+            /// @dev Unstake ERC20 and send balance to the user
+            PORTAL.unstake(_amount);
+            IERC20(principalToken).safeTransfer(
+                msg.sender,
+                principalToken.balanceOf(address(this))
+            );
         }
 
         /// @dev Emit the event that funds have been unstaked
