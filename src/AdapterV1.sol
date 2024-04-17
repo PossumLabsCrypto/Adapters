@@ -416,12 +416,10 @@ contract AdapterV1 is ReentrancyGuard {
         }
 
         /// @dev Withdraw principal from the Portal to the Adapter
-        /// @dev Differentiate between ETH or ERC20 withdrawals
-        if (address(principalToken) == address(0)) {
-            /// @dev Unstake ETH, usually receive slightly less than _amount
-            PORTAL.unstake(_amount);
+        PORTAL.unstake(_amount);
 
-            /// @dev Send native ETH received from Portal to the user (full balance)
+        /// @dev Send the received token balance to the user
+        if (address(principalToken) == address(0)) {
             (bool sent, ) = payable(msg.sender).call{
                 value: address(this).balance
             }("");
@@ -429,8 +427,6 @@ contract AdapterV1 is ReentrancyGuard {
                 revert ErrorsLib.FailedToSendNativeToken();
             }
         } else {
-            /// @dev Unstake ERC20 and send balance to the user
-            PORTAL.unstake(_amount);
             IERC20(principalToken).safeTransfer(
                 msg.sender,
                 principalToken.balanceOf(address(this))
