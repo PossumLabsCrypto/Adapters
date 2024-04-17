@@ -72,7 +72,6 @@ contract AdapterV1 is ReentrancyGuard {
 
     address public migrationDestination; // The new Adapter version
     uint256 public votesForMigration; // Track the yes-votes for migrating to a new Adapter
-    bool public inMigration; // True if the Adapter entered voting stage for migration
     bool public successMigrated; // True if the migration was executed by minting the stake NFT to the new Adapter
     mapping(address user => uint256 voteCount) public voted; // Track user votes for migration
 
