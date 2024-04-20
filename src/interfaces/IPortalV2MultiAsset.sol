@@ -74,4 +74,6 @@ interface IPortalV2MultiAsset {
         returns (address PRINCIPAL_TOKEN_ADDRESS);
 
     function DECIMALS_ADJUSTMENT() external view returns (uint256);
+
+    function portalNFT() external view returns (address);
 }

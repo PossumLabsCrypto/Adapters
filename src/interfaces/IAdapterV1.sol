@@ -16,6 +16,20 @@ struct SwapData {
 }
 
 interface IAdapterV1 {
+    function PORTAL() external view returns (address PORTAL);
+
+    function migrateStake(
+        address _user
+    )
+        external
+        returns (
+            uint256 lastUpdateTime,
+            uint256 lastMaxLockDuration,
+            uint256 stakedBalance,
+            uint256 maxStakeDebt,
+            uint256 portalEnergy
+        );
+
     function stake(address _receiver, uint256 _amount) external;
 
     function unstake(uint256 _amount) external;
