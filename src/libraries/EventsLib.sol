@@ -14,8 +14,8 @@ library EventsLib {
     );
 
     // --- Events related to staking & unstaking ---
-    event AdapterStaked(address indexed user, uint256 amountStaked);
-    event AdapterUnstaked(address indexed user, uint256 amountUnstaked);
+    event AdapterStaked(address indexed caller, uint256 amountStaked);
+    event AdapterUnstaked(address indexed caller, uint256 amountUnstaked);
 
     event AdapterPositionUpdated(
         address indexed user,
@@ -29,13 +29,13 @@ library EventsLib {
     // --- Events related to minting and burning PE ---
 
     event AdapterEnergyBurned(
-        address indexed user,
+        address indexed caller,
         address indexed recipient,
         uint256 amount
     );
 
     event AdapterEnergyMinted(
-        address indexed user,
+        address indexed caller,
         address indexed recipient,
         uint256 amount
     );

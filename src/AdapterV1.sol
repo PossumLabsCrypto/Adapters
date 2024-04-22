@@ -475,7 +475,7 @@ contract AdapterV1 is ReentrancyGuard {
         /// @dev Emit the event that Portal Energy has been purchased
         emit EventsLib.AdapterEnergyBuyExecuted(
             msg.sender,
-            msg.sender,
+            _recipient,
             amountReceived
         );
     }
