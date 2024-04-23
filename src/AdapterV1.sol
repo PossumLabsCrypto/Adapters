@@ -74,6 +74,8 @@ contract AdapterV1 is ReentrancyGuard {
     uint256 public votesForMigration; // Track the yes-votes for migrating to a new Adapter
     bool public successMigrated; // True if the migration was executed by minting the stake NFT to the new Adapter
     mapping(address user => uint256 voteCount) public voted; // Track user votes for migration
+    uint256 public constant TIMELOCK = 604800; // 7 Days delay before migration can be executed
+    uint256 migrationTime;
 
     // ============================================
     // ==               MODIFIERS                ==
@@ -126,12 +128,30 @@ contract AdapterV1 is ReentrancyGuard {
         }
 
         /// @dev Check if the votes are in favour of migrating (>50% of capital)
-        if (votesForMigration > totalPrincipalStaked / 2) {
-            /// @dev Mint an NFT to the new Adapter that holds the current Adapter stake information
-            /// @dev IMPORTANT: The migration contract must be able to receive ERC721 tokens
-            PORTAL.mintNFTposition(migrationDestination);
-            successMigrated = true;
+        if (
+            votesForMigration > totalPrincipalStaked / 2 && migrationTime == 0
+        ) {
+            migrationTime = block.timestamp + TIMELOCK;
         }
+    }
+
+    /// @notice This function mints the Portal NFT and transfers user stakes to a new Adapter
+    /// @dev Timelock protected function that can only be called once to move capital to a new Adapter
+    function executeMigration() external isMigrating {
+        /// @dev Ensure that the timelock has passed
+        if (block.timestamp < migrationTime) {
+            revert ErrorsLib.isTimeLocked();
+        }
+
+        /// @dev Ensure that the migration (minting of NFT) can only be performed once
+        if (successMigrated == true) {
+            revert ErrorsLib.hasMigrated();
+        }
+
+        /// @dev Mint an NFT to the new Adapter that holds the current Adapter stake information
+        /// @dev IMPORTANT: The migration contract must be able to receive ERC721 tokens
+        successMigrated = true;
+        PORTAL.mintNFTposition(migrationDestination);
     }
 
     /// @notice Function to enable the new Adapter to move over account information of users

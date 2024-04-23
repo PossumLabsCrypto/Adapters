@@ -23,8 +23,10 @@ library ErrorsLib {
     error InvalidMode();
     error InsufficientReserves();
     error notOwner();
+    error isTimeLocked();
     error isMigrating();
     error notMigrating();
+    error hasMigrated();
     error migrationVotePending();
     error notCalledByDestination();
     error TokenNotSet();
