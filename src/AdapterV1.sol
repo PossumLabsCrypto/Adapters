@@ -667,6 +667,17 @@ contract AdapterV1 is ReentrancyGuard {
         PSM.safeTransfer(pair, amountPSM);
         WETH.safeTransfer(pair, amountWETH);
         IRamsesPair(pair).mint(_swap.recevier);
+
+        /// @dev Return remaining tokens to the caller
+        PSMBalance = PSM.balanceOf(address(this));
+        WETHBalance = WETH.balanceOf(address(this));
+
+        if (PSMBalance > 0) {
+            PSM.safeTransfer(msg.sender, PSMBalance);
+        }
+        if (WETHBalance > 0) {
+            WETH.safeTransfer(msg.sender, WETHBalance);
+        }
     }
 
     /// @dev Calculate the required token amounts of PSM and WETH to add liquidity
