@@ -376,8 +376,8 @@ contract AdapterV1 is ReentrancyGuard {
 
         /// @dev If the staker had voted for migration, reset the vote
         if (voted[msg.sender] > 0) {
+            votesForMigration -= voted[msg.sender];
             voted[msg.sender] = 0;
-            votesForMigration -= accounts[msg.sender].stakedBalance;
         }
 
         /// @dev Get the current state of the user stake
@@ -454,7 +454,12 @@ contract AdapterV1 is ReentrancyGuard {
         uint256 _minReceived,
         uint256 _deadline
     ) external notMigrating {
-        /// @dev Rely on input validation from Portal
+        /// @dev Rely on amount input validation from Portal
+
+        /// @dev validate the recipient address
+        if (_recipient == address(0)) {
+            revert ErrorsLib.InvalidAddress();
+        }
 
         /// @dev Get the amount of portalEnergy received based on the amount of PSM tokens sold
         uint256 amountReceived = PORTAL.quoteBuyPortalEnergy(_amountInputPSM);
@@ -501,14 +506,6 @@ contract AdapterV1 is ReentrancyGuard {
     ) external notMigrating {
         /// @dev Only validate additional input arguments, let other checks float up from Portal
         if (_mode > 2) revert ErrorsLib.InvalidMode();
-
-        /// @dev Attempt to update the maxLock duration of the Portal. Requires 1 manual update to start
-        if (
-            PORTAL.maxLockDuration() > 7776000 &&
-            PORTAL.maxLockDuration() < 157680000
-        ) {
-            PORTAL.updateMaxLockDuration();
-        }
 
         /// @dev Get the current state of user stake in Adapter
         (
@@ -712,7 +709,12 @@ contract AdapterV1 is ReentrancyGuard {
         address _recipient,
         uint256 _amount
     ) external notMigrating {
-        /// @dev Rely on input validation of the Portal
+        /// @dev Rely on input amount validation of the Portal
+
+        /// @dev validate the recipient address
+        if (_recipient == address(0)) {
+            revert ErrorsLib.InvalidAddress();
+        }
 
         /// @dev Increase the portalEnergy of the recipient by the amount of portalEnergyToken burned
         accounts[_recipient].portalEnergy += _amount;
