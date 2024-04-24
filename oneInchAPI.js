@@ -18,7 +18,7 @@
 // first, install node
 // then, npm install axios
 // then, npm install dotenv (see .envExample for creating .env file)
-// then, node file.js
+// then, node file.js (for adding liquidity call just change it to adapter address)
 
 
 const dotenv = require('dotenv');
