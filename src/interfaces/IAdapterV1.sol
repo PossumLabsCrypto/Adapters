@@ -10,7 +10,7 @@ struct Account {
 }
 
 struct SwapData {
-    address recevier;
+    address receiver;
     uint256 psmAmount;
     bytes actionData;
 }
@@ -18,9 +18,7 @@ struct SwapData {
 interface IAdapterV1 {
     function PORTAL() external view returns (address PORTAL);
 
-    function migrateStake(
-        address _user
-    )
+    function migrateStake(address _user)
         external
         returns (
             uint256 lastUpdateTime,
@@ -34,22 +32,11 @@ interface IAdapterV1 {
 
     function unstake(uint256 _amount) external;
 
-    function mintPortalEnergyToken(
-        address _recipient,
-        uint256 _amount
-    ) external;
+    function mintPortalEnergyToken(address _recipient, uint256 _amount) external;
 
-    function burnPortalEnergyToken(
-        address _recipient,
-        uint256 _amount
-    ) external;
+    function burnPortalEnergyToken(address _recipient, uint256 _amount) external;
 
-    function buyPortalEnergy(
-        address _user,
-        uint256 _amount,
-        uint256 _minReceived,
-        uint256 _deadline
-    ) external;
+    function buyPortalEnergy(address _user, uint256 _amount, uint256 _minReceived, uint256 _deadline) external;
 
     function sellPortalEnergy(
         address payable _receiver,
@@ -67,9 +54,7 @@ interface IAdapterV1 {
         uint256 amountPSMMin,
         uint256 amountWETHMin,
         uint256 _deadline
-    )
-        external
-        returns (uint256 amountPSM, uint256 amountWETH, uint256 liquidity);
+    ) external returns (uint256 amountPSM, uint256 amountWETH, uint256 liquidity);
 
     function addLiquidityETH(
         address _receiver,
@@ -77,10 +62,7 @@ interface IAdapterV1 {
         uint256 _amountPSMMin,
         uint256 _amountETHMin,
         uint256 _deadline
-    )
-        external
-        payable
-        returns (uint256 amountPSM, uint256 amountETH, uint256 liquidity);
+    ) external payable returns (uint256 amountPSM, uint256 amountETH, uint256 liquidity);
 
     function removeLiquidity(
         address _receiver,
@@ -98,39 +80,21 @@ interface IAdapterV1 {
         uint256 _deadline
     ) external returns (uint256 amountPSM, uint256 amountETH);
 
-    function getUpdateAccount(
-        address _user,
-        uint256 _amount
-    )
+    function getUpdateAccount(address _user, uint256 _amount)
         external
         view
         returns (address, uint256, uint256, uint256, uint256, uint256, uint256);
 
-    function quoteforceUnstakeAll(
-        address _user
-    ) external view returns (uint256 portalEnergyTokenToBurn);
+    function quoteforceUnstakeAll(address _user) external view returns (uint256 portalEnergyTokenToBurn);
 
-    function quoteBuyPortalEnergy(
-        uint256 _amountInput
-    ) external view returns (uint256);
+    function quoteBuyPortalEnergy(uint256 _amountInput) external view returns (uint256);
 
-    function quoteSellPortalEnergy(
-        uint256 _amountInput
-    ) external view returns (uint256);
+    function quoteSellPortalEnergy(uint256 _amountInput) external view returns (uint256);
 
-    function quoteAddLiquidity(
-        uint256 _amountADesired,
-        uint256 _amountBDesired
-    )
+    function quoteAddLiquidity(uint256 _amountADesired, uint256 _amountBDesired)
         external
         view
-        returns (
-            uint256 _amountPSMDesired,
-            uint256 _amountWETHDesired,
-            uint256 liquidity
-        );
+        returns (uint256 _amountPSMDesired, uint256 _amountWETHDesired, uint256 liquidity);
 
-    function quoteRemoveLiquidity(
-        uint256 _liquidity
-    ) external view returns (uint256 amountA, uint256 amountB);
+    function quoteRemoveLiquidity(uint256 _liquidity) external view returns (uint256 amountA, uint256 amountB);
 }
