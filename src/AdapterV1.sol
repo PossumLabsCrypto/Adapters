@@ -677,6 +677,34 @@ contract AdapterV1 is ReentrancyGuard {
         denominator = SECONDS_PER_YEAR * PORTAL.DECIMALS_ADJUSTMENT();
     }
 
+    /// @dev Send ETH or the specified token to the VirtualLP
+    /// @dev Provide a reward of 5% to the caller
+    function salvageToken(address _token) external {
+        /// @dev Salvage native ETH
+        if (_token == address(0)) {
+            uint256 ethSalvage = (address(this).balance * 95) / 100;
+            uint256 rewardEth = address(this).balance - ethSalvage;
+
+            /// @dev Send the ETH balance to the VirtualLP & pay reward
+            (bool sent1,) = payable(address(PORTAL.VIRTUAL_LP())).call{value: ethSalvage}("");
+            if (!sent1) {
+                revert ErrorsLib.FailedToSendNativeToken();
+            }
+            (bool sent2,) = payable(msg.sender).call{value: rewardEth}("");
+            if (!sent2) {
+                revert ErrorsLib.FailedToSendNativeToken();
+            }
+        } else {
+            /// @dev Salvage ERC20 tokens
+            uint256 salvage = (IERC20(_token).balanceOf(address(this)) * 95) / 100;
+            uint256 reward = IERC20(_token).balanceOf(address(this)) - salvage;
+
+            /// @dev Send the token balance to the VirtualLP & pay reward
+            IERC20(_token).safeTransfer(address(PORTAL.VIRTUAL_LP()), salvage);
+            IERC20(_token).safeTransfer(msg.sender, reward);
+        }
+    }
+
     receive() external payable {}
 
     fallback() external payable {}
