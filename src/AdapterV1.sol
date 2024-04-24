@@ -475,8 +475,8 @@ contract AdapterV1 is ReentrancyGuard {
     /// @dev This internal function assembles the swap via the 1Inch router from API data
     function swapOneInch(SwapData memory _swap, bool _forLiquidity) internal {
         /// @dev decode the data for getting _executor, _description, _data.
-        (address _executor, SwapDescription memory _description, bytes memory _data,,) =
-            abi.decode(_swap.actionData, (address, SwapDescription, bytes, uint256, uint256));
+        (address _executor, SwapDescription memory _description, bytes memory _data) =
+            abi.decode(_swap.actionData, (address, SwapDescription, bytes));
 
         /// @dev Swap via the 1Inch Router
         /// @dev Allowance is increased in separate function to save gas
