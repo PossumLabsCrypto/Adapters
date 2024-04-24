@@ -118,9 +118,7 @@ contract AdapterV1 is ReentrancyGuard {
         }
 
         /// @dev Check if the votes are in favour of migrating (>50% of capital)
-        if (
-            votesForMigration > totalPrincipalStaked / 2 && migrationTime == 0
-        ) {
+        if (votesForMigration > totalPrincipalStaked / 2 && migrationTime == 0) {
             migrationTime = block.timestamp + TIMELOCK;
         }
     }
@@ -298,7 +296,6 @@ contract AdapterV1 is ReentrancyGuard {
     /// @dev This function allows users to stake their principal tokens into the Adapter
     /// @dev Can only be called if the virtual LP is active (indirect condition)
     /// @dev Cannot be called after a migration destination was proposed (withdraw-only mode)
-    /// @dev Does not follow CEI pattern for optimisation reasons, handled tokens are trusted
     /// @dev Update the user account
     /// @dev Update the global tracker of staked principal
     /// @dev Stake the principal into the connected Portal
@@ -404,12 +401,10 @@ contract AdapterV1 is ReentrancyGuard {
     /// @param _minReceived The minimum amount of portalEnergy to receive
     /// @param _deadline The unix timestamp that marks the deadline for order execution
 
-    function buyPortalEnergy(
-        address _recipient,
-        uint256 _amountInputPSM,
-        uint256 _minReceived,
-        uint256 _deadline
-    ) external notMigrating {
+    function buyPortalEnergy(address _recipient, uint256 _amountInputPSM, uint256 _minReceived, uint256 _deadline)
+        external
+        notMigrating
+    {
         /// @dev Rely on amount input validation from Portal
 
         /// @dev validate the recipient address
@@ -554,7 +549,7 @@ contract AdapterV1 is ReentrancyGuard {
         PSM.safeTransfer(pair, amountPSM);
         WETH.safeTransfer(pair, amountWETH);
         IRamsesPair(pair).mint(_swap.receiver);
-        
+
         /// @dev Return remaining tokens to the caller
         if (PSM.balanceOf(address(this)) > 0) PSM.transfer(_swap.receiver, PSM.balanceOf(address(this)));
         if (WETH.balanceOf(address(this)) > 0) WETH.transfer(_swap.receiver, WETH.balanceOf(address(this)));
