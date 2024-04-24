@@ -66,6 +66,8 @@ contract AdapterV1 is ReentrancyGuard {
     uint256 public votesForMigration; // Track the yes-votes for migrating to a new Adapter
     bool public successMigrated; // True if the migration was executed by minting the stake NFT to the new Adapter
     mapping(address user => uint256 voteCount) public voted; // Track user votes for migration
+    uint256 public constant TIMELOCK = 604800; // 7 Days delay before migration can be executed
+    uint256 migrationTime;
 
     // ============================================
     // ==               MODIFIERS                ==
@@ -116,12 +118,30 @@ contract AdapterV1 is ReentrancyGuard {
         }
 
         /// @dev Check if the votes are in favour of migrating (>50% of capital)
-        if (votesForMigration > totalPrincipalStaked / 2) {
-            /// @dev Mint an NFT to the new Adapter that holds the current Adapter stake information
-            /// @dev IMPORTANT: The migration contract must be able to receive ERC721 tokens
-            PORTAL.mintNFTposition(migrationDestination);
-            successMigrated = true;
+        if (
+            votesForMigration > totalPrincipalStaked / 2 && migrationTime == 0
+        ) {
+            migrationTime = block.timestamp + TIMELOCK;
         }
+    }
+
+    /// @notice This function mints the Portal NFT and transfers user stakes to a new Adapter
+    /// @dev Timelock protected function that can only be called once to move capital to a new Adapter
+    function executeMigration() external isMigrating {
+        /// @dev Ensure that the timelock has passed
+        if (block.timestamp < migrationTime) {
+            revert ErrorsLib.isTimeLocked();
+        }
+
+        /// @dev Ensure that the migration (minting of NFT) can only be performed once
+        if (successMigrated == true) {
+            revert ErrorsLib.hasMigrated();
+        }
+
+        /// @dev Mint an NFT to the new Adapter that holds the current Adapter stake information
+        /// @dev IMPORTANT: The migration contract must be able to receive ERC721 tokens
+        successMigrated = true;
+        PORTAL.mintNFTposition(migrationDestination);
     }
 
     /// @notice Function to enable the new Adapter to move over account information of users
@@ -330,8 +350,8 @@ contract AdapterV1 is ReentrancyGuard {
 
         /// @dev If the staker had voted for migration, reset the vote
         if (voted[msg.sender] > 0) {
+            votesForMigration -= voted[msg.sender];
             voted[msg.sender] = 0;
-            votesForMigration -= accounts[msg.sender].stakedBalance;
         }
 
         /// @dev Get the current state of the user stake
@@ -383,11 +403,19 @@ contract AdapterV1 is ReentrancyGuard {
     /// @param _amountInputPSM The amount of PSM tokens to sell
     /// @param _minReceived The minimum amount of portalEnergy to receive
     /// @param _deadline The unix timestamp that marks the deadline for order execution
-    function buyPortalEnergy(address _recipient, uint256 _amountInputPSM, uint256 _minReceived, uint256 _deadline)
-        external
-        notMigrating
-    {
-        /// @dev Rely on input validation from Portal
+
+    function buyPortalEnergy(
+        address _recipient,
+        uint256 _amountInputPSM,
+        uint256 _minReceived,
+        uint256 _deadline
+    ) external notMigrating {
+        /// @dev Rely on amount input validation from Portal
+
+        /// @dev validate the recipient address
+        if (_recipient == address(0)) {
+            revert ErrorsLib.InvalidAddress();
+        }
 
         /// @dev Get the amount of portalEnergy received based on the amount of PSM tokens sold
         uint256 amountReceived = PORTAL.quoteBuyPortalEnergy(_amountInputPSM);
@@ -427,11 +455,6 @@ contract AdapterV1 is ReentrancyGuard {
     ) external notMigrating {
         /// @dev Only validate additional input arguments, let other checks float up from Portal
         if (_mode > 2) revert ErrorsLib.InvalidMode();
-
-        /// @dev Attempt to update the maxLock duration of the Portal. Requires 1 manual update to start
-        if (PORTAL.maxLockDuration() > 7776000 && PORTAL.maxLockDuration() < 157680000) {
-            PORTAL.updateMaxLockDuration();
-        }
 
         /// @dev Get the current state of user stake in Adapter
         (,, uint256 stakedBalance, uint256 maxStakeDebt, uint256 portalEnergy,,) = getUpdateAccount(msg.sender, 0, true);
@@ -531,6 +554,8 @@ contract AdapterV1 is ReentrancyGuard {
         PSM.safeTransfer(pair, amountPSM);
         WETH.safeTransfer(pair, amountWETH);
         IRamsesPair(pair).mint(_swap.receiver);
+        
+        /// @dev Return remaining tokens to the caller
         if (PSM.balanceOf(address(this)) > 0) PSM.transfer(_swap.receiver, PSM.balanceOf(address(this)));
         if (WETH.balanceOf(address(this)) > 0) WETH.transfer(_swap.receiver, WETH.balanceOf(address(this)));
     }
@@ -580,8 +605,14 @@ contract AdapterV1 is ReentrancyGuard {
     /// @dev This function allows users to convert Portal Energy Tokens into internal Adapter PE
     /// @dev Burn Portal Energy Tokens of caller and increase portalEnergy in Adapter
     /// @param _amount The amount of portalEnergyToken to burn
+
     function burnPortalEnergyToken(address _recipient, uint256 _amount) external notMigrating {
         /// @dev Rely on input validation of the Portal
+
+        /// @dev validate the recipient address
+        if (_recipient == address(0)) {
+            revert ErrorsLib.InvalidAddress();
+        }
 
         /// @dev Increase the portalEnergy of the recipient by the amount of portalEnergyToken burned
         accounts[_recipient].portalEnergy += _amount;
