@@ -139,6 +139,7 @@ contract AdapterV1 is ReentrancyGuard {
         /// @dev Mint an NFT to the new Adapter that holds the current Adapter stake information
         /// @dev IMPORTANT: The migration contract must be able to receive ERC721 tokens
         successMigrated = true;
+        totalPrincipalStaked = 0;
         PORTAL.mintNFTposition(migrationDestination);
     }
 
