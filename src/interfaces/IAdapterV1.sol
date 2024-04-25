@@ -11,7 +11,7 @@ struct Account {
 
 struct SwapData {
     address receiver;
-    uint256 amountReceived;
+    uint256 psmAmount;
     bytes actionData;
 }
 
