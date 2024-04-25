@@ -450,7 +450,7 @@ contract AdapterV1 is ReentrancyGuard {
         bytes calldata _actionData,
         uint256 _minPSMForLiquidiy,
         uint256 _minWethForLiquidiy
-    ) external notMigrating {
+    ) external {
         /// @dev Only validate additional input arguments, let other checks float up from Portal
         if (_mode > 2) revert ErrorsLib.InvalidMode();
 
