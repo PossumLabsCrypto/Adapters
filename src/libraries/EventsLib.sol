@@ -2,16 +2,8 @@
 pragma solidity =0.8.19;
 
 library EventsLib {
-    event AdapterEnergyBuyExecuted(
-        address indexed caller,
-        address indexed recipient,
-        uint256 amount
-    );
-    event AdapterEnergySellExecuted(
-        address indexed caller,
-        address indexed recipient,
-        uint256 amount
-    );
+    event AdapterEnergyBuyExecuted(address indexed caller, address indexed recipient, uint256 amount);
+    event AdapterEnergySellExecuted(address indexed caller, address indexed recipient, uint256 amount);
 
     // --- Events related to staking & unstaking ---
     event AdapterStaked(address indexed caller, uint256 amountStaked);
@@ -28,15 +20,9 @@ library EventsLib {
 
     // --- Events related to minting and burning PE ---
 
-    event AdapterEnergyBurned(
-        address indexed caller,
-        address indexed recipient,
-        uint256 amount
-    );
+    event AdapterEnergyBurned(address indexed caller, address indexed recipient, uint256 amount);
 
-    event AdapterEnergyMinted(
-        address indexed caller,
-        address indexed recipient,
-        uint256 amount
-    );
+    event AdapterEnergyMinted(address indexed caller, address indexed recipient, uint256 amount);
+
+    event migrationExecuted(address destination);
 }

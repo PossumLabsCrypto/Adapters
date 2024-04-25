@@ -140,6 +140,9 @@ contract AdapterV1 is ReentrancyGuard {
         successMigrated = true;
         totalPrincipalStaked = 0;
         PORTAL.mintNFTposition(migrationDestination);
+
+        /// @dev Emit migration event
+        emit EventsLib.migrationExecuted(migrationDestination);
     }
 
     /// @notice Function to enable the new Adapter to move over account information of users
@@ -527,10 +530,6 @@ contract AdapterV1 is ReentrancyGuard {
     /// @dev Sell some amount of PSM for WETH, then pair in Ramses Pool2
     function addLiquidity(SwapData memory _swap, uint256 _minPSMForLiquidiy, uint256 _minWethForLiquidiy) internal {
         swapOneInch(_swap, true);
-
-        /// @dev Decode the swap data for getting minPSM and minWETH.
-        // (,,, uint256 minPSM, uint256 minWeth) =
-        //     abi.decode(_swap.actionData, (address, SwapDescription, bytes, uint256, uint256));
 
         /// @dev This contract shouldn't hold any token, so we pass all tokens.
         uint256 PSMBalance = PSM.balanceOf(address(this));
