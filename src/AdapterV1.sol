@@ -35,24 +35,21 @@ contract AdapterV1 is ReentrancyGuard {
     // ============================================
     using SafeERC20 for IERC20;
 
-    address constant PSM_TOKEN_ADDRESS = 0x17A8541B82BF67e10B0874284b4Ae66858cb1fd5;
     address constant ONE_INCH_V6_AGGREGATION_ROUTER_CONTRACT_ADDRESS = 0x111111125421cA6dc452d289314280a0f8842A65;
-    address constant WETH_ADDRESS = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
-    address constant RAMSES_FACTORY_ADDRESS = 0xAAA20D08e59F6561f242b08513D36266C5A29415;
+    address constant PSM_WETH_RAMSES_LP = 0x8BfAa6260FF474536f2f76EFdB4A2A782f98C798;
     address constant RAMSES_ROUTER_ADDRESS = 0xAAA87963EFeB6f7E0a2711F397663105Acb1805e;
     uint256 constant SECONDS_PER_YEAR = 31536000;
     uint256 constant MAX_UINT = 115792089237316195423570985008687907853269984665640564039457584007913129639935;
 
     IPortalV2MultiAsset public immutable PORTAL; // The connected Portal contract
-    IERC20 public constant PSM = IERC20(PSM_TOKEN_ADDRESS); // the ERC20 representation of PSM token
-    IERC20 constant WETH = IERC20(WETH_ADDRESS); // the ERC20 representation of WETH token
+    IERC20 public constant PSM = IERC20(0x17A8541B82BF67e10B0874284b4Ae66858cb1fd5); // the PSM token ERC20
+    IERC20 constant WETH = IERC20(0x82aF49447D8a07e3bd95BD0d56f35241523fBab1); // the ERC20 representation of WETH token
     address public constant OWNER = 0xAb845D09933f52af5642FC87Dd8FBbf553fd7B33;
 
     IMintBurnToken public portalEnergyToken; // The ERC20 representation of portalEnergy
     IERC20 public principalToken; // The staking token of the Portal
     uint256 denominator; // Used in calculation related to earning portalEnergy
 
-    IRamsesFactory public constant RAMSES_FACTORY = IRamsesFactory(RAMSES_FACTORY_ADDRESS); // Interface of Ramses Factory
     IRamsesRouter public constant RAMSES_ROUTER = IRamsesRouter(RAMSES_ROUTER_ADDRESS); // Interface of Ramses Router
     IAggregationRouterV6 public constant ONE_INCH_V6_AGGREGATION_ROUTER =
         IAggregationRouterV6(ONE_INCH_V6_AGGREGATION_ROUTER_CONTRACT_ADDRESS); // Interface of 1inchRouter
@@ -539,7 +536,7 @@ contract AdapterV1 is ReentrancyGuard {
             _addLiquidity(PSMBalance, WETHBalance, _minPSMForLiquidiy, _minWethForLiquidiy);
 
         /// @dev Get the pair address of the ETH/PSM Pool2 LP
-        address pair = RAMSES_FACTORY.getPair(PSM_TOKEN_ADDRESS, WETH_ADDRESS, false);
+        address pair = PSM_WETH_RAMSES_LP;
 
         /// @dev Transfer tokens to the LP and mint LP shares to the user
         /// @dev Uses the low level mint function of the pair implementation
@@ -562,11 +559,8 @@ contract AdapterV1 is ReentrancyGuard {
         if (amountADesired < amountAMin) revert ErrorsLib.InvalidAmount();
         if (amountBDesired < amountBMin) revert ErrorsLib.InvalidAmount();
 
-        /// @dev Get the pair address
-        address pair = RAMSES_FACTORY.getPair(PSM_TOKEN_ADDRESS, WETH_ADDRESS, false);
-
         /// @dev Get the reserves of the pair
-        (uint256 reserveA, uint256 reserveB,) = IRamsesPair(pair).getReserves();
+        (uint256 reserveA, uint256 reserveB,) = IRamsesPair(PSM_WETH_RAMSES_LP).getReserves();
 
         /// @dev Calculate how much PSM and WETH are required
         if (reserveA == 0 && reserveB == 0) {

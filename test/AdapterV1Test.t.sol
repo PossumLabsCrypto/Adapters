@@ -251,31 +251,6 @@ contract AdapterV1Test is Test {
         assertEq(principal_USDC.balanceOf(virtualLP.USDC_WATER()), VaultBalance + amount);
     }
 
-    function testStake_USDC_DangerousPayableFunction_PoC() external {
-        // ///if a user sends any ETH along USDC, those are probably gonna stuck in the adapter contract
-        // ///a zero msg.value check can be added (in else branch) to avoid this.
-        // // NOTE This will be fixed! And then this test should fail (I'm commenting it out thats why)
-        // uint256 amount = 1e9;
-        // uint256 VaultBalance = principal_USDC.balanceOf(virtualLP.USDC_WATER());
-
-        // help_setAllowances();
-
-        // vm.startPrank(alice);
-        // principal_USDC.approve(address(adapter_USDC), amount);
-        // adapter_USDC.stake{value: amount}(amount);
-        // vm.stopPrank();
-
-        // assertEq(
-        //     principal_USDC.balanceOf(alice),
-        //     (startAmount * usdc_precision) / WAD - amount
-        // );
-        // assertEq(
-        //     principal_USDC.balanceOf(virtualLP.USDC_WATER()),
-        //     VaultBalance + amount
-        // );
-        // assertEq(alice.balance, startAmount - amount);
-    }
-
     // revert 1: not enough ETH in wallet
     function testRevertsStake_ETH() external {
         uint256 amount = 1e36;
