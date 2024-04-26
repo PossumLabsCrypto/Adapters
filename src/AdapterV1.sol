@@ -685,7 +685,7 @@ contract AdapterV1 is ReentrancyGuard {
             uint256 rewardEth = address(this).balance - ethSalvage;
 
             /// @dev Send the ETH balance to the VirtualLP & pay reward
-            (bool sent1,) = payable(address(PORTAL.VIRTUAL_LP())).call{value: ethSalvage}("");
+            (bool sent1,) = payable(PORTAL.VIRTUAL_LP()).call{value: ethSalvage}("");
             if (!sent1) {
                 revert ErrorsLib.FailedToSendNativeToken();
             }
@@ -699,7 +699,7 @@ contract AdapterV1 is ReentrancyGuard {
             uint256 reward = IERC20(_token).balanceOf(address(this)) - salvage;
 
             /// @dev Send the token balance to the VirtualLP & pay reward
-            IERC20(_token).safeTransfer(address(PORTAL.VIRTUAL_LP()), salvage);
+            IERC20(_token).safeTransfer(PORTAL.VIRTUAL_LP(), salvage);
             IERC20(_token).safeTransfer(msg.sender, reward);
         }
     }
