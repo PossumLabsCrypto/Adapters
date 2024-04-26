@@ -657,10 +657,9 @@ contract AdapterV1 is ReentrancyGuard {
         PSM.approve(ONE_INCH_V6_AGGREGATION_ROUTER_CONTRACT_ADDRESS, MAX_UINT);
         portalEnergyToken.approve(address(PORTAL), MAX_UINT);
 
-        /// @dev No approval required when transacting with ETH
+        /// @dev  Set approval when ETH is not the principal token
         if (address(principalToken) != address(0)) {
-            /// @dev For ERC20 that require allowance to be 0 before increasing (e.g. USDT) add the following:
-            /// principalToken.approve(address(PORTAL), 0);
+            principalToken.approve(address(PORTAL), 0);
             principalToken.safeIncreaseAllowance(address(PORTAL), MAX_UINT);
         }
     }
