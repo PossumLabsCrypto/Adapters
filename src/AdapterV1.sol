@@ -669,10 +669,10 @@ contract AdapterV1 is ReentrancyGuard {
         if (PORTAL.PRINCIPAL_TOKEN_ADDRESS() != address(0)) {
             principalToken = IERC20(PORTAL.PRINCIPAL_TOKEN_ADDRESS());
         }
-        if (address(PORTAL.portalEnergyToken()) == address(0)) {
+        if (PORTAL.portalEnergyToken() == address(0)) {
             revert ErrorsLib.TokenNotSet();
         }
-        portalEnergyToken = IMintBurnToken(address(PORTAL.portalEnergyToken()));
+        portalEnergyToken = IMintBurnToken(PORTAL.portalEnergyToken());
         denominator = SECONDS_PER_YEAR * PORTAL.DECIMALS_ADJUSTMENT();
     }
 
