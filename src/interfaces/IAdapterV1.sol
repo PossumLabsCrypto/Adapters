@@ -10,7 +10,7 @@ struct Account {
 }
 
 struct SwapData {
-    address receiver;
+    address recipient;
     uint256 psmAmount;
     bytes actionData;
 }

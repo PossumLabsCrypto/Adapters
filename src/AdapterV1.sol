@@ -497,15 +497,21 @@ contract AdapterV1 is ReentrancyGuard {
         (address _executor, SwapDescription memory _description, bytes memory _data) =
             abi.decode(_swap.actionData, (address, SwapDescription, bytes));
 
+        /// @dev Ensure that the receiving address of the swap is correct
+        /// @dev In Mode 1 (LP) the Adapter must receive the output token
+        /// @dev In Mode 2 (swap) the user must receive the output token
+        if (_forLiquidity) _description.dstReceiver = payable(address(this));
+        else _description.dstReceiver = payable(_swap.recipient);
+
         /// @dev Swap via the 1Inch Router
         /// @dev Allowance is increased in separate function to save gas
         (, uint256 spentAmount_) =
             ONE_INCH_V6_AGGREGATION_ROUTER.swap(IAggregationExecutor(_executor), _description, _data);
 
-        /// @dev Send remaining tokens back to user if not called from addLiquidity
+        /// @dev If not called from addLiquidity, revert if there are unspent tokens after the swap
         if (!_forLiquidity) {
             uint256 remainAmount = _swap.psmAmount - spentAmount_;
-            if (remainAmount > 0) PSM.safeTransfer(msg.sender, remainAmount);
+            if (remainAmount > 0) revert ErrorsLib.InvalidSwap();
         }
     }
 
@@ -545,11 +551,11 @@ contract AdapterV1 is ReentrancyGuard {
         /// @dev Assumes that the pair already exists which is the case
         PSM.safeTransfer(pair, amountPSM);
         WETH.safeTransfer(pair, amountWETH);
-        IRamsesPair(pair).mint(_swap.receiver);
+        IRamsesPair(pair).mint(_swap.recipient);
 
         /// @dev Return remaining tokens to the caller
-        if (PSM.balanceOf(address(this)) > 0) PSM.transfer(_swap.receiver, PSM.balanceOf(address(this)));
-        if (WETH.balanceOf(address(this)) > 0) WETH.transfer(_swap.receiver, WETH.balanceOf(address(this)));
+        if (PSM.balanceOf(address(this)) > 0) PSM.transfer(_swap.recipient, PSM.balanceOf(address(this)));
+        if (WETH.balanceOf(address(this)) > 0) WETH.transfer(_swap.recipient, WETH.balanceOf(address(this)));
     }
 
     /// @dev Calculate the required token amounts of PSM and WETH to add liquidity

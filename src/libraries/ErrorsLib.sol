@@ -21,6 +21,7 @@ library ErrorsLib {
     error FailedToSendNativeToken();
 
     error InvalidMode();
+    error InvalidSwap();
     error InsufficientReserves();
     error notOwner();
     error isTimeLocked();
