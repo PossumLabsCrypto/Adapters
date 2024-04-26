@@ -437,6 +437,8 @@ contract AdapterV1 is ReentrancyGuard {
     /// @param _deadline The unix timestamp that marks the deadline for order execution
     /// @param _mode The trading mode of the swap. 0 = PSM, 1 = ETH/PSM LP, 2 = 1Inch swap
     /// @param _actionData Data required for the 1Inch Router, received by 1Inch API
+    /// @param _minPSMForLiquidiy Minimum amount of PSM tokens to receive for liquidity addition
+    /// @param _minWethForLiquidiy Minimum amount of WETH tokens to receive for liquidity addition
     function sellPortalEnergy(
         address payable _recipient,
         uint256 _amountInputPE,
