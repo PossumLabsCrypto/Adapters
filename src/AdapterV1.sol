@@ -122,7 +122,7 @@ contract AdapterV1 is ReentrancyGuard {
     /// @dev Timelock protected function that can only be called once to move capital to a new Adapter
     function executeMigration() external isMigrating {
         /// @dev Ensure that the timelock has passed
-        if (block.timestamp < migrationTime) {
+        if (block.timestamp < migrationTime && migrationTime > 0) {
             revert ErrorsLib.isTimeLocked();
         }
 
