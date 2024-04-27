@@ -479,9 +479,9 @@ contract AdapterV1 is ReentrancyGuard {
         if (_mode == 0) {
             PSM.safeTransfer(_recipient, amountReceived);
         } else if (_mode == 1) {
-            addLiquidity(swap, _minPSMForLiquidiy, _minWethForLiquidiy);
+            addLiquidity(msg.sender, swap, _minPSMForLiquidiy, _minWethForLiquidiy);
         } else {
-            swapOneInch(swap, false);
+            swapOneInch(msg.sender, swap, false);
         }
 
         /// @dev Emit the event that Portal Energy has been sold
@@ -492,14 +492,14 @@ contract AdapterV1 is ReentrancyGuard {
     // ==         External Integrations          ==
     // ============================================
     /// @dev This internal function assembles the swap via the 1Inch router from API data
-    function swapOneInch(SwapData memory _swap, bool _forLiquidity) internal {
+    function swapOneInch(address _caller, SwapData memory _swap, bool _forLiquidity) internal {
         /// @dev decode the data for getting _executor, _description, _data.
         (address _executor, SwapDescription memory _description, bytes memory _data) =
             abi.decode(_swap.actionData, (address, SwapDescription, bytes));
 
         /// @dev Ensure that the receiving address of the swap is correct
         /// @dev In Mode 1 (LP) the Adapter must receive the output token
-        /// @dev In Mode 2 (swap) the user must receive the output token
+        /// @dev In Mode 2 (swap) the user (_recipient) must receive the output token
         if (_forLiquidity) _description.dstReceiver = payable(address(this));
         else _description.dstReceiver = payable(_swap.recipient);
 
@@ -508,10 +508,10 @@ contract AdapterV1 is ReentrancyGuard {
         (, uint256 spentAmount_) =
             ONE_INCH_V6_AGGREGATION_ROUTER.swap(IAggregationExecutor(_executor), _description, _data);
 
-        /// @dev If not called from addLiquidity, revert if there are unspent tokens after the swap
+        /// @dev If not called from addLiquidity, send remaining PSM back to caller
         if (!_forLiquidity) {
             uint256 remainAmount = _swap.psmAmount - spentAmount_;
-            if (remainAmount > 0) revert ErrorsLib.InvalidSwap();
+            if (remainAmount > 0) PSM.transfer(_caller, remainAmount);
         }
     }
 
@@ -532,8 +532,14 @@ contract AdapterV1 is ReentrancyGuard {
 
     /// @dev This function is called when mode = 1 in sellPortalEnergy
     /// @dev Sell some amount of PSM for WETH, then pair in Ramses Pool2
-    function addLiquidity(SwapData memory _swap, uint256 _minPSMForLiquidiy, uint256 _minWethForLiquidiy) internal {
-        swapOneInch(_swap, true);
+    function addLiquidity(
+        address _caller,
+        SwapData memory _swap,
+        uint256 _minPSMForLiquidiy,
+        uint256 _minWethForLiquidiy
+    ) internal {
+        /// @dev perform the 1Inch swap to get some WETH.
+        swapOneInch(_caller, _swap, true);
 
         /// @dev This contract shouldn't hold any token, so we pass all tokens.
         uint256 PSMBalance = PSM.balanceOf(address(this));
@@ -554,8 +560,8 @@ contract AdapterV1 is ReentrancyGuard {
         IRamsesPair(pair).mint(_swap.recipient);
 
         /// @dev Return remaining tokens to the caller
-        if (PSM.balanceOf(address(this)) > 0) PSM.transfer(_swap.recipient, PSM.balanceOf(address(this)));
-        if (WETH.balanceOf(address(this)) > 0) WETH.transfer(_swap.recipient, WETH.balanceOf(address(this)));
+        if (PSM.balanceOf(address(this)) > 0) PSM.transfer(_caller, PSM.balanceOf(address(this)));
+        if (WETH.balanceOf(address(this)) > 0) WETH.transfer(_caller, WETH.balanceOf(address(this)));
     }
 
     /// @dev Calculate the required token amounts of PSM and WETH to add liquidity
