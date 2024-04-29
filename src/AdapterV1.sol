@@ -64,6 +64,8 @@ contract AdapterV1 is ReentrancyGuard {
     uint256 public constant TIMELOCK = 604800; // 7 Days delay before migration can be executed
     uint256 migrationTime;
 
+    uint256 private constant _PARTIAL_FILL = 1 << 0; // 1Inch flag for partial fills
+
     // ============================================
     // ==               MODIFIERS                ==
     // ============================================
@@ -502,6 +504,9 @@ contract AdapterV1 is ReentrancyGuard {
         /// @dev In Mode 2 (swap) the user (_recipient) must receive the output token
         if (_forLiquidity) _description.dstReceiver = payable(address(this));
         else _description.dstReceiver = payable(_swap.recipient);
+
+        /// @dev Ensure that partial fills are not allowed
+        if (_description.flags & _PARTIAL_FILL != 0) revert ErrorsLib.InvalidSwap();
 
         /// @dev Swap via the 1Inch Router
         /// @dev Allowance is increased in separate function to save gas
