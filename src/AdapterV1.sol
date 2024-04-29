@@ -6,11 +6,11 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IMintBurnToken} from "./interfaces/IMintBurnToken.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IPortalV2MultiAsset} from "./interfaces/IPortalV2MultiAsset.sol";
-import {IAdapterV1, Account, SwapData} from "./interfaces/IAdapterV1.sol";
+import {Account, SwapData} from "./interfaces/IAdapterV1.sol";
 import {EventsLib} from "./libraries/EventsLib.sol";
 import {ErrorsLib} from "./libraries/ErrorsLib.sol";
 import {IAggregationRouterV6, SwapDescription, IAggregationExecutor} from "./interfaces/IAggregationRouterV6.sol";
-import {IRamsesFactory, IRamsesRouter, IRamsesPair} from "./interfaces/IRamses.sol";
+import {IRamsesPair} from "./interfaces/IRamses.sol";
 
 /// @title Adapter V1 contract for Portals V2
 /// @author Possum Labs
@@ -37,7 +37,7 @@ contract AdapterV1 is ReentrancyGuard {
 
     address constant ONE_INCH_V6_AGGREGATION_ROUTER_CONTRACT_ADDRESS = 0x111111125421cA6dc452d289314280a0f8842A65;
     address constant PSM_WETH_RAMSES_LP = 0x8BfAa6260FF474536f2f76EFdB4A2A782f98C798;
-    address constant RAMSES_ROUTER_ADDRESS = 0xAAA87963EFeB6f7E0a2711F397663105Acb1805e;
+    // address constant RAMSES_ROUTER_ADDRESS = 0xAAA87963EFeB6f7E0a2711F397663105Acb1805e;
     uint256 constant SECONDS_PER_YEAR = 31536000;
     uint256 constant MAX_UINT = 115792089237316195423570985008687907853269984665640564039457584007913129639935;
 
@@ -50,7 +50,7 @@ contract AdapterV1 is ReentrancyGuard {
     IERC20 public principalToken; // The staking token of the Portal
     uint256 denominator; // Used in calculation related to earning portalEnergy
 
-    IRamsesRouter public constant RAMSES_ROUTER = IRamsesRouter(RAMSES_ROUTER_ADDRESS); // Interface of Ramses Router
+    // IRamsesRouter public constant RAMSES_ROUTER = IRamsesRouter(RAMSES_ROUTER_ADDRESS); // Interface of Ramses Router
     IAggregationRouterV6 public constant ONE_INCH_V6_AGGREGATION_ROUTER =
         IAggregationRouterV6(ONE_INCH_V6_AGGREGATION_ROUTER_CONTRACT_ADDRESS); // Interface of 1inchRouter
 
