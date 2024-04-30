@@ -195,6 +195,7 @@ contract AdapterV1Test is Test {
         address PETAddr = address(adapterNew.portalEnergyToken());
         address PETAddr2 = address(portal_ETH.portalEnergyToken());
         assertEq(PETAddr, PETAddr2);
+        console.log(address(PSM));
         console.log(address(adapter_ETH));
         console.log(address(alice));
     }
@@ -249,6 +250,17 @@ contract AdapterV1Test is Test {
 
         assertEq(principal_USDC.balanceOf(alice), (startAmount * usdc_precision) / WAD - amount);
         assertEq(principal_USDC.balanceOf(virtualLP.USDC_WATER()), VaultBalance + amount);
+    }
+
+    function testStake_USDC_NativeTokenNotAllowed() external {
+        uint256 amount = 1e9;
+        help_setAllowances();
+
+        vm.startPrank(alice);
+        principal_USDC.approve(address(adapter_USDC), amount);
+        vm.expectRevert(ErrorsLib.NativeTokenNotAllowed.selector);
+        adapter_USDC.stake{value: amount}(amount);
+        vm.stopPrank();
     }
 
     // revert 1: not enough ETH in wallet
@@ -396,9 +408,13 @@ contract AdapterV1Test is Test {
         vm.prank(alice);
         adapter_ETH.acceptMigrationDestination();
 
+        vm.warp(block.timestamp + 10 days);
+
+        vm.prank(bob);
+        adapter_ETH.executeMigration();
+        assertEq(adapter_ETH.successMigrated(), true);
         assertEq(adapter_ETH.voted(alice), 1e19);
         assertEq(adapter_ETH.votesForMigration(), 1e19);
-        assertEq(adapter_ETH.successMigrated(), true);
     }
 
     function testacceptMigrationDestination_ThreeUsersMajorityVotes() external {
@@ -417,11 +433,15 @@ contract AdapterV1Test is Test {
         vm.prank(bob);
         adapter_ETH.acceptMigrationDestination();
 
+        vm.warp(block.timestamp + 10 days);
+
+        vm.prank(bob);
+        adapter_ETH.executeMigration();
+        assertEq(adapter_ETH.successMigrated(), true);
         assertEq(adapter_ETH.voted(alice), 1e19);
         assertEq(adapter_ETH.voted(bob), 1e19);
         assertEq(adapter_ETH.voted(karen), 0);
         assertEq(adapter_ETH.votesForMigration(), 1e19 * 2);
-        assertEq(adapter_ETH.successMigrated(), true);
     }
 
     function testacceptMigrationDestination_ThreeUsersMinorityVote() external {
@@ -455,6 +475,10 @@ contract AdapterV1Test is Test {
 
         vm.prank(alice);
         adapter_ETH.acceptMigrationDestination();
+        vm.warp(block.timestamp + 10 days);
+
+        vm.prank(bob);
+        adapter_ETH.executeMigration();
         assertEq(adapter_ETH.successMigrated(), true);
 
         vm.prank(newAdapterAddr);
@@ -470,6 +494,10 @@ contract AdapterV1Test is Test {
         adapter_ETH.proposeMigrationDestination(newAdapterAddr);
         vm.prank(alice);
         adapter_ETH.acceptMigrationDestination();
+        vm.warp(block.timestamp + 10 days);
+
+        vm.prank(bob);
+        adapter_ETH.executeMigration();
         assertEq(adapter_ETH.successMigrated(), true);
 
         vm.prank(karen);
@@ -506,9 +534,9 @@ contract AdapterV1Test is Test {
 
     // buyPortalEnergy
     function testBuyPortalEnergy() external {
+        adapter_ETH.increaseAllowances();
         vm.startPrank(alice);
         PSM.approve(address(adapter_ETH), startAmount);
-        // NOTE This test only passes when we add PSM.approve in the buyPortalEnergy()
         adapter_ETH.buyPortalEnergy(alice, startAmount, 1, block.timestamp);
         vm.stopPrank();
         (,,,, uint256 portalEnergyNew) = adapter_ETH.accounts(alice);
@@ -516,6 +544,7 @@ contract AdapterV1Test is Test {
     }
 
     function testBuyPortalEnergy_MultipleUsers() external {
+        adapter_ETH.increaseAllowances();
         vm.startPrank(alice);
         PSM.approve(address(adapter_ETH), startAmount);
         adapter_ETH.buyPortalEnergy(alice, startAmount, 1, block.timestamp);
@@ -564,6 +593,7 @@ contract AdapterV1Test is Test {
 
     // sellPortalEnergy
     function testSellPortalEnergy_ModeZero() external {
+        adapter_ETH.increaseAllowances();
         vm.startPrank(alice);
         PSM.approve(address(adapter_ETH), startAmount);
         adapter_ETH.buyPortalEnergy(alice, startAmount, 1, block.timestamp);
@@ -583,20 +613,20 @@ contract AdapterV1Test is Test {
     }
 
     function testSellPortalEnergy_ModeOne() external { //TODO
-            // vm.startPrank(alice);
-            // PSM.approve(address(adapter_ETH), startAmount);
-            // adapter_ETH.buyPortalEnergy(alice, startAmount, 1, block.timestamp);
-            // vm.stopPrank();
+        // adapter_ETH.increaseAllowances();
+        // vm.startPrank(alice);
+        // PSM.approve(address(adapter_ETH), startAmount);
+        // adapter_ETH.buyPortalEnergy(alice, startAmount, 1, block.timestamp);
+        // vm.stopPrank();
 
-        // (,,,, uint portalEnergy) = adapter_ETH.accounts(alice);
+        // (,,,, uint256 portalEnergy) = adapter_ETH.accounts(alice);
         // assertEq(PSM.balanceOf(alice), 0);
         // assertGt(portalEnergy, 1);
-        // uint MODE = 1;
-        // // bytes memory response = '{ "dstAmount": "18933897941780920", "tx": { "from": "0xc7183455a4c133ae270771860664b6b7ec320bb1", "to": "0x111111125421ca6dc452d289314280a0f8842a65", "data": "0xe2c95c820000000000000000000000005dad7600c5d89fe3824ffa99ec1c3eb8bf3b050100000000000000000000000017a8541b82bf67e10b0874284b4ae66858cb1fd5000000000000000000000000000000000000000000000c94a9ffe5a6357d9746000000000000000000000000000000000000000000000000003c8a407aee158c388000000000000000000000a3cc74aacc1b91b7364a510222864d548c4f80383a8db16d", "value": "0", "gas": 0, "gasPrice": "21500000"}}';
-        // bytes memory response = "0xe2c95c820000000000000000000000005dad7600c5d89fe3824ffa99ec1c3eb8bf3b050100000000000000000000000017a8541b82bf67e10b0874284b4ae66858cb1fd5000000000000000000000000000000000000000000000c94a9ffe5a6357d9746000000000000000000000000000000000000000000000000003c8a407aee158c388000000000000000000000a3cc74aacc1b91b7364a510222864d548c4f80383a8db16d";
+        // uint256 MODE = 1;
+        // bytes memory response = "0x07ed2379000000000000000000000000e37e799d5077682fa0a244d46e5649f71457bd0900000000000000000000000017a8541b82bf67e10b0874284b4ae66858cb1fd5000000000000000000000000eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee000000000000000000000000e37e799d5077682fa0a244d46e5649f71457bd090000000000000000000000005dad7600c5d89fe3824ffa99ec1c3eb8bf3b0501000000000000000000000000000000000000000000000c94a9ffe5a6357d9746000000000000000000000000000000000000000000000000004025ee509227b600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000120000000000000000000000000000000000000000000000000000000000000019600000000000000000000000000000000000000017800015e0001480000fe00a007e5c0d20000000000000000000000000000000000000000000000da00009e00004f02a00000000000000000000000000000000000000000000000000000000003696c89ee63c1e501a137bed0b2dc07f0addc795b4dee3d2d47410fb917a8541b82bf67e10b0874284b4ae66858cb1fd502a0000000000000000000000000000000000000000000000000004025ee509227b6ee63c1e5007fcdc35463e3770c2fb992716cd070b63540b947af88d065e77c8cc2239327c5edb3a432268e5831410182af49447d8a07e3bd95bd0d56f35241523fbab100042e1a7d4d000000000000000000000000000000000000000000000000000000000000000000a0f2fa6b66eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee0000000000000000000000000000000000000000000000000040cbcf1b14eca4000000000000000000059a97844d134ac061111111125421ca6dc452d289314280a0f8842a6500206b4be0b9111111125421ca6dc452d289314280a0f8842a65000000000000000000003a8db16d";
         // vm.startPrank(alice);
-        // adapter_ETH.sellPortalEnergy(payable(alice), portalEnergy, 1, block.timestamp, MODE, response);
-        // (,,,, uint portalEnergyNew) = adapter_ETH.accounts(alice);
+        // adapter_ETH.sellPortalEnergy(payable(alice), portalEnergy, 1, block.timestamp, MODE, response, 1, 1);
+        // (,,,, uint256 portalEnergyNew) = adapter_ETH.accounts(alice);
         // assertGt(PSM.balanceOf(alice), 0);
         // assertEq(portalEnergyNew, 0);
         // vm.stopPrank();
@@ -608,22 +638,23 @@ contract AdapterV1Test is Test {
             // adapter_ETH.buyPortalEnergy(alice, startAmount, 1, block.timestamp);
             // vm.stopPrank();
 
-        // (,,,, uint portalEnergy) = adapter_ETH.accounts(alice);
+        // (,,,, uint256 portalEnergy) = adapter_ETH.accounts(alice);
         // assertEq(PSM.balanceOf(alice), 0);
         // assertGt(portalEnergy, 1);
 
-        // uint MODE = 2;
+        // uint256 MODE = 2;
         // bytes memory response = '{ "dstAmount": "18933897941780920", "tx": { "from": "0xc7183455a4c133ae270771860664b6b7ec320bb1", "to": "0x111111125421ca6dc452d289314280a0f8842a65", "data": "0xe2c95c820000000000000000000000005dad7600c5d89fe3824ffa99ec1c3eb8bf3b050100000000000000000000000017a8541b82bf67e10b0874284b4ae66858cb1fd5000000000000000000000000000000000000000000000c94a9ffe5a6357d9746000000000000000000000000000000000000000000000000003c8a407aee158c388000000000000000000000a3cc74aacc1b91b7364a510222864d548c4f80383a8db16d", "value": "0", "gas": 0, "gasPrice": "21500000"}}';
         // vm.startPrank(alice);
         // adapter_ETH.sellPortalEnergy(payable(alice), portalEnergy, 1, block.timestamp, MODE, response);
 
-        // (,,,, uint portalEnergyNew) = adapter_ETH.accounts(alice);
+        // (,,,, uint256 portalEnergyNew) = adapter_ETH.accounts(alice);
         // assertGt(PSM.balanceOf(alice), 0);
         // assertEq(portalEnergyNew, 0);
         // vm.stopPrank();
     }
 
     function testRevertsSellPortalEnergy_ModeInvalid() external {
+        adapter_ETH.increaseAllowances();
         vm.startPrank(alice);
         PSM.approve(address(adapter_ETH), startAmount);
         adapter_ETH.buyPortalEnergy(alice, startAmount, 1, block.timestamp);
@@ -659,6 +690,7 @@ contract AdapterV1Test is Test {
     }
 
     function testRevertsSellPortalEnergy_NotEnoughEnergy() external {
+        adapter_ETH.increaseAllowances();
         vm.startPrank(alice);
         PSM.approve(address(adapter_ETH), startAmount);
         adapter_ETH.buyPortalEnergy(alice, startAmount, 1, block.timestamp);
@@ -684,6 +716,7 @@ contract AdapterV1Test is Test {
 
     // MintPortalEnergyToken
     function testMintPortalEnergyToken() public {
+        adapter_ETH.increaseAllowances();
         vm.startPrank(alice);
         PSM.approve(address(adapter_ETH), startAmount);
         adapter_ETH.buyPortalEnergy(alice, startAmount, 1, block.timestamp);
@@ -698,6 +731,7 @@ contract AdapterV1Test is Test {
     }
 
     function testRevertsMintPortalEnergyToken_InvalidAmt() external {
+        adapter_ETH.increaseAllowances();
         vm.startPrank(alice);
         PSM.approve(address(adapter_ETH), startAmount);
         adapter_ETH.buyPortalEnergy(alice, startAmount, 1, block.timestamp);
@@ -707,6 +741,7 @@ contract AdapterV1Test is Test {
     }
 
     function testRevertsMintPortalEnergyToken_InvalidAddr() external {
+        adapter_ETH.increaseAllowances();
         vm.startPrank(alice);
         PSM.approve(address(adapter_ETH), startAmount);
         adapter_ETH.buyPortalEnergy(alice, startAmount, 1, block.timestamp);
@@ -716,6 +751,7 @@ contract AdapterV1Test is Test {
     }
 
     function testMintPortalEnergyToken_NotEnoughEnergy() external {
+        adapter_ETH.increaseAllowances();
         vm.startPrank(alice);
         PSM.approve(address(adapter_ETH), startAmount);
         adapter_ETH.buyPortalEnergy(alice, startAmount, 1, block.timestamp);
@@ -727,6 +763,7 @@ contract AdapterV1Test is Test {
 
     // burnPortalEnergyToken
     function testBurnPortalEnergyToken() external {
+        adapter_ETH.increaseAllowances();
         vm.startPrank(alice);
         PSM.approve(address(adapter_ETH), startAmount);
         adapter_ETH.buyPortalEnergy(alice, startAmount, 1, block.timestamp);
@@ -739,7 +776,6 @@ contract AdapterV1Test is Test {
         assertGt(portalEnergyToken_ETH.balanceOf(alice), 1);
 
         portalEnergyToken_ETH.approve(address(adapter_ETH), portalEnergyToken_ETH.balanceOf(alice));
-        // NOTE This test only passes when we add portalEnergyToken.approve in the buyPortalEnergy()
         adapter_ETH.burnPortalEnergyToken(alice, portalEnergyToken_ETH.balanceOf(alice));
         (,,,, uint256 portalEnergyNew) = adapter_ETH.accounts(alice);
         assertGt(portalEnergyNew, 1);
@@ -748,6 +784,7 @@ contract AdapterV1Test is Test {
     }
 
     function testRevertsBurnPortalEnergyToken_InvalidAmt() external {
+        adapter_ETH.increaseAllowances();
         vm.startPrank(alice);
         PSM.approve(address(adapter_ETH), startAmount);
         adapter_ETH.buyPortalEnergy(alice, startAmount, 1, block.timestamp);
@@ -765,6 +802,7 @@ contract AdapterV1Test is Test {
     }
 
     function testFailBurnPortalEnergyToken_InvalidAddr() external {
+        adapter_ETH.increaseAllowances();
         vm.startPrank(alice);
         PSM.approve(address(adapter_ETH), startAmount);
         adapter_ETH.buyPortalEnergy(alice, startAmount, 1, block.timestamp);
@@ -782,6 +820,7 @@ contract AdapterV1Test is Test {
     }
 
     function testFailBurnPortalEnergyToken_NotEnoughTokens() external {
+        adapter_ETH.increaseAllowances();
         vm.startPrank(alice);
         PSM.approve(address(adapter_ETH), startAmount);
         adapter_ETH.buyPortalEnergy(alice, startAmount, 1, block.timestamp);
