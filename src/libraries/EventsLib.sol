@@ -21,8 +21,11 @@ library EventsLib {
     // --- Events related to minting and burning PE ---
 
     event AdapterEnergyBurned(address indexed caller, address indexed recipient, uint256 amount);
-
     event AdapterEnergyMinted(address indexed caller, address indexed recipient, uint256 amount);
 
+    // --- Events related to migration ---
+
     event migrationExecuted(address destination);
+    event MigrationProposed(address destination);
+    event VotedForMigration(address user, uint256 totalVotes, uint256 votesRequired);
 }

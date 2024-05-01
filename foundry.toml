@@ -13,4 +13,4 @@ optimizer_runs = 500
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
 [rpc_endpoints]
-arbitrum_infura = "https://arbitrum-mainnet.infura.io/v3/${arbitrum_infura}"
+alchemy_arbitrum_api = "${ARB_MAINNET_URL}"

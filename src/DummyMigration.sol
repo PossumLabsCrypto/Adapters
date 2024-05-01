@@ -43,12 +43,6 @@ contract DummyMigration is ERC721Holder {
         ) = ADAPTER.migrateStake(_user);
 
         // Update the user account in this contract (examplary only, must consider existing stake)
-        accounts[_user] = Account(
-            lastUpdateTime,
-            lastMaxLockDuration,
-            stakedBalance,
-            maxStakeDebt,
-            portalEnergy
-        );
+        accounts[_user] = Account(lastUpdateTime, lastMaxLockDuration, stakedBalance, maxStakeDebt, portalEnergy);
     }
 }

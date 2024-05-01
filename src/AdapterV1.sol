@@ -98,6 +98,9 @@ contract AdapterV1 is ReentrancyGuard {
     /// @dev The current value of migrationDestination must be the zero address
     function proposeMigrationDestination(address _adapter) external onlyOwner notMigrating {
         migrationDestination = _adapter;
+
+        /// @dev emit event that migration has been proposed
+        emit EventsLib.MigrationProposed(_adapter);
     }
 
     /// @notice Capital based voting process to accept the migration contract
@@ -115,16 +118,20 @@ contract AdapterV1 is ReentrancyGuard {
         }
 
         /// @dev Check if the votes are in favour of migrating (>50% of capital)
-        if (votesForMigration > totalPrincipalStaked / 2 && migrationTime == 0) {
+        uint256 votesRequired = totalPrincipalStaked / 2;
+        if (votesForMigration > votesRequired && migrationTime == 0) {
             migrationTime = block.timestamp + TIMELOCK;
         }
+
+        /// @dev Emit event that vote has been placed
+        emit EventsLib.VotedForMigration(msg.sender, votesForMigration, votesRequired);
     }
 
     /// @notice This function mints the Portal NFT and transfers user stakes to a new Adapter
     /// @dev Timelock protected function that can only be called once to move capital to a new Adapter
     function executeMigration() external isMigrating {
-        /// @dev Ensure that the timelock has passed
-        if (block.timestamp < migrationTime && migrationTime > 0) {
+        /// @dev Ensure that the timelock is set and has passed
+        if (block.timestamp < migrationTime || migrationTime == 0) {
             revert ErrorsLib.isTimeLocked();
         }
 

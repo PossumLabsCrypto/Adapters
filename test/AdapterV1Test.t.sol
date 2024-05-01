@@ -66,7 +66,7 @@ contract AdapterV1Test is Test {
     address karen = address(uint160(uint256(keccak256("karen"))));
 
     function setUp() public {
-        vm.createSelectFork({urlOrAlias: "arbitrum_infura"});
+        vm.createSelectFork({urlOrAlias: "alchemy_arbitrum_api", blockNumber: 200000000});
 
         principal_USDC = _USDC_TOKEN;
         principal_ETH = IERC20(address(0));
@@ -194,9 +194,9 @@ contract AdapterV1Test is Test {
         address PETAddr = address(adapterNew.portalEnergyToken());
         address PETAddr2 = address(portal_ETH.portalEnergyToken());
         assertEq(PETAddr, PETAddr2);
-        console.log(address(PSM));
-        console.log(address(adapter_ETH));
-        console.log(address(alice));
+        console2.log(address(PSM));
+        console2.log(address(adapter_ETH));
+        console2.log(address(alice));
     }
 
     // stake
