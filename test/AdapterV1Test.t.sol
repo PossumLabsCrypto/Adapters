@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity =0.8.19;
 
-import "forge-std/console.sol";
 import {Test, console2} from "forge-std/Test.sol";
 import {AdapterV1} from "../src/AdapterV1.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -613,11 +612,11 @@ contract AdapterV1Test is Test {
     }
 
     function testSellPortalEnergy_ModeOne() external { //TODO
-        // adapter_ETH.increaseAllowances();
-        // vm.startPrank(alice);
-        // PSM.approve(address(adapter_ETH), startAmount);
-        // adapter_ETH.buyPortalEnergy(alice, startAmount, 1, block.timestamp);
-        // vm.stopPrank();
+            // adapter_ETH.increaseAllowances();
+            // vm.startPrank(alice);
+            // PSM.approve(address(adapter_ETH), startAmount);
+            // adapter_ETH.buyPortalEnergy(alice, startAmount, 1, block.timestamp);
+            // vm.stopPrank();
 
         // (,,,, uint256 portalEnergy) = adapter_ETH.accounts(alice);
         // assertEq(PSM.balanceOf(alice), 0);
