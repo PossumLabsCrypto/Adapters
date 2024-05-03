@@ -76,7 +76,8 @@ contract AdapterV1Test is Test {
         portal_USDC =
             new PortalV2MultiAsset(address(virtualLP), 1e55, address(principal_USDC), 6, "USD COIN", "USDC", "abcd");
 
-        portal_ETH = new PortalV2MultiAsset(address(virtualLP), 1e55, address(principal_ETH), 6, "Ether", "ETH", "abcd");
+        portal_ETH =
+            new PortalV2MultiAsset(address(virtualLP), 1e55, address(principal_ETH), 18, "Ether", "ETH", "abcd");
 
         help_setupVirtualLP();
         help_setupPortals();
