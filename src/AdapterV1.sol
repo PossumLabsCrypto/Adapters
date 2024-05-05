@@ -684,7 +684,6 @@ contract AdapterV1 is ReentrancyGuard {
 
     /// @dev Initialize important variables, called by the constructor
     function setUp() internal {
-        if (PORTAL.PRINCIPAL_TOKEN_ADDRESS() != address(0)) {}
         if (PORTAL.portalEnergyToken() == address(0)) {
             revert ErrorsLib.TokenNotSet();
         }
