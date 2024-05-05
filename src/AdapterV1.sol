@@ -510,7 +510,7 @@ contract AdapterV1 is ReentrancyGuard {
         /// @dev In Mode 1 (LP) the Adapter must receive the output token
         /// @dev In Mode 2 (swap) the user (_recipient) must receive the output token
         if (_forLiquidity && _description.dstReceiver != address(this)) revert ErrorsLib.InvalidSwap();
-        else if (_description.dstReceiver != _swap.recipient) revert ErrorsLib.InvalidSwap();
+        if (!_forLiquidity && _description.dstReceiver != _swap.recipient) revert ErrorsLib.InvalidSwap();
 
         /// @dev Ensure that partial fills are not allowed
         if (_description.flags & _PARTIAL_FILL != 0) revert ErrorsLib.InvalidSwap();
