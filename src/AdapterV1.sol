@@ -215,7 +215,6 @@ contract AdapterV1 is ReentrancyGuard {
         uint256 portalEnergyNetChange;
         uint256 timePassed = block.timestamp - account.lastUpdateTime;
         uint256 maxLockDifference = maxLockDuration - account.lastMaxLockDuration;
-        uint256 adjustedPE = amount * maxLockDuration * 1e18;
         stakedBalance = account.stakedBalance;
 
         /// @dev Check that the Stake Balance is sufficient for unstaking the amount
@@ -237,7 +236,7 @@ contract AdapterV1 is ReentrancyGuard {
         }
 
         /// @dev Calculate the adjustment of Portal Energy from balance change
-        uint256 portalEnergyAdjustment = adjustedPE / denominator;
+        uint256 portalEnergyAdjustment = (amount * maxLockDuration * 1e18) / denominator;
 
         /// @dev Calculate the amount of Portal Energy Tokens to be burned for unstaking the amount
         portalEnergyTokensRequired = !isPositive
