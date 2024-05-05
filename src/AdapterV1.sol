@@ -684,12 +684,11 @@ contract AdapterV1 is ReentrancyGuard {
 
     /// @dev Initialize important variables, called by the constructor
     function setUp() internal {
-        if (PORTAL.PRINCIPAL_TOKEN_ADDRESS() != address(0)) {
-            principalToken = IERC20(PORTAL.PRINCIPAL_TOKEN_ADDRESS());
-        }
+        if (PORTAL.PRINCIPAL_TOKEN_ADDRESS() != address(0)) {}
         if (PORTAL.portalEnergyToken() == address(0)) {
             revert ErrorsLib.TokenNotSet();
         }
+        principalToken = IERC20(PORTAL.PRINCIPAL_TOKEN_ADDRESS());
         portalEnergyToken = IMintBurnToken(PORTAL.portalEnergyToken());
         denominator = SECONDS_PER_YEAR * PORTAL.DECIMALS_ADJUSTMENT();
     }
