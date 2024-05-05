@@ -28,6 +28,7 @@ contract AdapterV1 is ReentrancyGuard {
     constructor(address _PORTAL_ADDRESS) {
         PORTAL = IPortalV2MultiAsset(_PORTAL_ADDRESS);
         setUp();
+        increaseAllowances();
     }
 
     // ============================================
@@ -669,7 +670,7 @@ contract AdapterV1 is ReentrancyGuard {
     // ==                GENERAL                 ==
     // ============================================
     /// @dev Increase token spending allowances of Adapter holdings
-    function increaseAllowances() external {
+    function increaseAllowances() public {
         PSM.approve(address(PORTAL), MAX_UINT);
         PSM.approve(ONE_INCH_V6_AGGREGATION_ROUTER_CONTRACT_ADDRESS, MAX_UINT);
         portalEnergyToken.approve(address(PORTAL), MAX_UINT);
