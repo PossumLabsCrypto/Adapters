@@ -31,8 +31,4 @@ interface IPortalV2MultiAsset {
     function DECIMALS_ADJUSTMENT() external view returns (uint256);
 
     function VIRTUAL_LP() external view returns (address);
-
-    function portalNFT() external view returns (address);
-
-    function redeemNFTposition(uint256 _tokenId) external;
 }
