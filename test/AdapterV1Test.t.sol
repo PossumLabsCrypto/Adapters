@@ -10,7 +10,7 @@ import {Account} from "./../src/interfaces/IAdapterV1.sol";
 import {EventsLib} from "./../src/libraries/EventsLib.sol";
 import {ErrorsLib} from "./../src/libraries/ErrorsLib.sol";
 import {IWETH} from "./../src/interfaces/IWETH.sol";
-import {IRamsesFactory, IRamsesRouter, IRamsesPair} from "./../src/interfaces/IRamses.sol";
+import {IRamsesPair} from "./../src/interfaces/IRamses.sol";
 
 contract AdapterV1Test is Test {
     address constant PSM_TOKEN_ADDRESS = 0x17A8541B82BF67e10B0874284b4Ae66858cb1fd5;
@@ -46,8 +46,6 @@ contract AdapterV1Test is Test {
     IERC20 public principal_ETH;
 
     IWETH public constant WETH = IWETH(WETH_ADDRESS); // Interface of WETH
-    IRamsesFactory public RAMSES_FACTORY = IRamsesFactory(RAMSES_FACTORY_ADDRESS); // Interface of Ramses Factory
-    IRamsesRouter public RAMSES_ROUTER = IRamsesRouter(RAMSES_ROUTER_ADDRESS); // Interface of Ramses Router
     IERC20 constant PSM = IERC20(PSM_TOKEN_ADDRESS);
 
     uint256 public denominator_USDC;
