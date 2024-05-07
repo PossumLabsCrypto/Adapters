@@ -1,1 +1,2 @@
-API_TOKEN="1inch api token"
+ARB_MAINNET_URL= https://arbitrum-mainnet.infura.io/v3/your_api
+API_TOKEN = 1inch_api_token
