@@ -223,9 +223,9 @@ contract AdapterV1 is ReentrancyGuard {
             revert ErrorsLib.InsufficientStakeBalance();
         }
 
-        /// @dev Check the user account state based on lastUpdateTime
-        /// @dev If this variable is 0, the user never staked and could not earn PE
-        if (account.lastUpdateTime > 0) {
+        /// @dev Check the user account state based on stakedBalance
+        /// @dev If this variable is 0, the user could not earn PE
+        if (stakedBalance > 0) {
             /// @dev Calculate the Portal Energy earned since the last update
             uint256 portalEnergyEarned = stakedBalance * timePassed;
 
