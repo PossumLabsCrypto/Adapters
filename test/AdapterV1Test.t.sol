@@ -610,13 +610,7 @@ contract AdapterV1Test is Test {
         vm.stopPrank();
     }
 
-    function testSellPortalEnergy_ModeOne() external { //TODO
-            // adapter_ETH.increaseAllowances();
-            // vm.startPrank(alice);
-            // PSM.approve(address(adapter_ETH), startAmount);
-            // adapter_ETH.buyPortalEnergy(alice, startAmount, 1, block.timestamp);
-            // vm.stopPrank();
-
+    function testSellPortalEnergy_ModeOne() external {
         // (,,,, uint256 portalEnergy) = adapter_ETH.accounts(alice);
         // assertEq(PSM.balanceOf(alice), 0);
         // assertGt(portalEnergy, 1);
@@ -628,14 +622,15 @@ contract AdapterV1Test is Test {
         // assertGt(PSM.balanceOf(alice), 0);
         // assertEq(portalEnergyNew, 0);
         // vm.stopPrank();
+        //TODO
+        // adapter_ETH.increaseAllowances();
+        // vm.startPrank(alice);
+        // PSM.approve(address(adapter_ETH), startAmount);
+        // adapter_ETH.buyPortalEnergy(alice, startAmount, 1, block.timestamp);
+        // vm.stopPrank();
     }
 
-    function testSellPortalEnergy_ModeTwo() external { //TODO
-            // vm.startPrank(alice);
-            // PSM.approve(address(adapter_ETH), startAmount);
-            // adapter_ETH.buyPortalEnergy(alice, startAmount, 1, block.timestamp);
-            // vm.stopPrank();
-
+    function testSellPortalEnergy_ModeTwo() external {
         // (,,,, uint256 portalEnergy) = adapter_ETH.accounts(alice);
         // assertEq(PSM.balanceOf(alice), 0);
         // assertGt(portalEnergy, 1);
@@ -648,6 +643,11 @@ contract AdapterV1Test is Test {
         // (,,,, uint256 portalEnergyNew) = adapter_ETH.accounts(alice);
         // assertGt(PSM.balanceOf(alice), 0);
         // assertEq(portalEnergyNew, 0);
+        // vm.stopPrank();
+        //TODO
+        // vm.startPrank(alice);
+        // PSM.approve(address(adapter_ETH), startAmount);
+        // adapter_ETH.buyPortalEnergy(alice, startAmount, 1, block.timestamp);
         // vm.stopPrank();
     }
 
